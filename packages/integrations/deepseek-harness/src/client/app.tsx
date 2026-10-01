@@ -21,10 +21,10 @@ function toneFor(verdict: string | undefined): 'ok' | 'warn' | 'bad' | 'neutral'
   return 'neutral'
 }
 
-function Card(props: { title: string; children: React.ReactNode; meta?: string }): React.ReactElement {
+function Card(props: { title?: string; children: React.ReactNode; meta?: string }): React.ReactElement {
   return (
     <div className="pmwb-card">
-      <h3>{props.title}</h3>
+      {props.title !== undefined && <h3>{props.title}</h3>}
       {props.meta !== undefined && <div className="pmwb-muted" style={{ marginBottom: 8 }}>{props.meta}</div>}
       {props.children}
     </div>
@@ -44,13 +44,53 @@ function KV(props: { rows: Array<[string, React.ReactNode]> }): React.ReactEleme
   )
 }
 
-/** Tolerant fallback: any unexpected shape renders as a collapsible JSON tree. */
-function JsonTree(props: { data: unknown; label: string }): React.ReactElement {
+function SectionTitle(props: { children: React.ReactNode }): React.ReactElement {
+  return <div className="pmwb-sec-title">{props.children}</div>
+}
+
+/** Document-style page title: date + human summary. */
+function DocTitle(props: { summary: string; sub?: string }): React.ReactElement {
+  const date = new Date()
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
   return (
-    <details className="pmwb-card">
-      <summary style={{ cursor: 'pointer', fontSize: 13 }}>{props.label}</summary>
-      <pre className="pmwb-pre">{JSON.stringify(props.data, null, 2)}</pre>
-    </details>
+    <div style={{ marginBottom: 12 }}>
+      <div className="pmwb-doc-title">{dateStr} · {props.summary}</div>
+      {props.sub !== undefined && <div className="pmwb-doc-sub">{props.sub}</div>}
+    </div>
+  )
+}
+
+/** Horizontal progress bar with count caption. */
+function ProgressBar(props: { value: number; total: number; caption?: string; tone?: 'ok' | 'warn' | 'bad' }): React.ReactElement {
+  const pct = props.total > 0 ? Math.round((props.value / props.total) * 100) : 0
+  return (
+    <div className="pmwb-progress-row">
+      <div className="pmwb-progress" data-tone={props.tone}>
+        <div style={{ width: `${pct}%` }} />
+      </div>
+      <span className="pmwb-muted" style={{ whiteSpace: 'nowrap' }}>
+        {props.caption ?? `${props.value}/${props.total} · ${pct}%`}
+      </span>
+    </div>
+  )
+}
+
+/** Stacked ratio bar with legend. */
+function StackedBar(props: { segments: Array<{ label: string; value: number; color: string }>; total?: number }): React.ReactElement {
+  const total = props.total ?? props.segments.reduce((acc, s) => acc + s.value, 0)
+  return (
+    <div>
+      <div className="pmwb-stacked">
+        {props.segments.map((s) => (
+          <span key={s.label} style={{ width: total > 0 ? `${(s.value / total) * 100}%` : '0%', background: s.color }} />
+        ))}
+      </div>
+      <div className="pmwb-legend">
+        {props.segments.map((s) => (
+          <span key={s.label}><i style={{ background: s.color }} />{s.label} · {s.value}</span>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -60,7 +100,7 @@ function EnvelopeErrors(props: { errors: Array<{ code: string; message: string; 
     <div>
       {props.errors.map((e, i) => (
         <div className="pmwb-err" key={i}>
-          <span className="pmwb-mono">{e.code}</span> — {e.message}
+          {e.message}
           {e.hint !== undefined && <div className="pmwb-muted">hint: {e.hint}</div>}
         </div>
       ))}
@@ -89,8 +129,20 @@ function usePageData<T>(fetcher: () => Promise<T>, deps: React.DependencyList): 
 
 const str = (v: unknown): string => (v === undefined || v === null ? '—' : typeof v === 'string' ? v : JSON.stringify(v))
 
-function SectionTitle(props: { children: React.ReactNode }): React.ReactElement {
-  return <div className="pmwb-sec-title">{props.children}</div>
+/** Truncate long text with an expandable full view. */
+function LongText(props: { text: string; limit?: number }): React.ReactElement {
+  const limit = props.limit ?? 90
+  const [open, setOpen] = useState(false)
+  if (props.text.length <= limit) return <span>{props.text}</span>
+  return (
+    <span>
+      {open ? props.text : `${props.text.slice(0, limit)}…`}
+      {' '}
+      <a onClick={() => setOpen(!open)} style={{ color: 'var(--tk-color-brand-primary,#1677ff)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+        {open ? '收起' : '展开全文'}
+      </a>
+    </span>
+  )
 }
 
 /* ============================================================ design tokens (POMaster preset) */
@@ -141,6 +193,8 @@ interface OverviewData {
   errors: Array<{ code: string; message: string }>
 }
 
+const SEGMENT_COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16']
+
 function OverviewPage(props: { t: Translate }): React.ReactElement {
   const { t } = props
   const { data, error, reload } = usePageData<OverviewData>(() => getJSON('/api/pomaster/overview'), [])
@@ -150,57 +204,49 @@ function OverviewPage(props: { t: Translate }): React.ReactElement {
   }, [reload])
   if (error !== null) return <div className="pmwb-err">{t('tab.overview')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
+  const lifecycle = data.objects.byLifecycle ?? {}
+  const lifecycleSegments = Object.entries(lifecycle).map(([k, v], i) => ({ label: k, value: v as number, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length] ?? '#1677ff' }))
   return (
     <div>
       <div className="pmwb-actions">
         <button className="pmwb-btn" onClick={reload}>{t('common.refresh')}</button>
-        <span className="pmwb-muted">{t('common.polls')} · generation_seq {data.generationSeq}</span>
+        <span className="pmwb-muted">{t('common.polls')}</span>
       </div>
       <Card title={t('overview.project')}>
         <KV rows={[
           [t('overview.name'), data.project.name],
-          [t('overview.governedBy'), t('overview.pomaster')],
-          [t('overview.cli'), data.project.pomasterVersion ?? t('common.none')],
           [t('overview.baseline'), <Badge tone={toneFor(data.baseline.state)}>{data.baseline.state}</Badge>],
           [t('overview.activeTask'), data.activeTask.present ? t('overview.activeCount', { n: data.activeTask.count }) : <span className="pmwb-muted">{t('overview.none')}</span>],
-          [t('overview.permits'), data.permits.uniqueActiveRefs.length > 0 ? data.permits.uniqueActiveRefs.join(', ') : t('common.none')],
+          [t('overview.attention'), data.attention.total === 0 ? <Badge tone="ok">{t('common.clean')}</Badge> : `${data.attention.total}`],
           [t('overview.objects'), `${data.objects.total}`],
+          [t('overview.stage'), <Badge tone="warn">{t('overview.stageName')}</Badge>],
         ]} />
       </Card>
       <div className="pmwb-grid2">
-        <Card title={t('overview.attention')}>
-          {data.attention.total === 0
-            ? <div className="pmwb-empty">{t('common.clean')}</div>
-            : (
-              <ul className="pmwb-list">
-                {Object.entries(data.attention.byCode).map(([code, n]) => (
-                  <li key={code}><span className="pmwb-mono">{code}</span> × {n}</li>
-                ))}
-              </ul>
-            )}
+        <Card title={t('overview.objectMix')}>
+          <StackedBar segments={lifecycleSegments} total={data.objects.total} />
         </Card>
         <Card title={t('overview.tools')}>
           <KV rows={[
             [t('overview.readiness'), data.tools.readiness ?? t('common.none')],
             [t('overview.capabilities'), data.tools.capabilities ?? t('common.none')],
-            [t('overview.bindings'), data.tools.readyBindings ?? t('common.none')],
             [t('overview.gaps'), data.tools.gaps ?? t('common.none')],
-            [t('overview.tip'), data.tools.capabilityTip ?? t('common.none')],
           ]} />
         </Card>
       </div>
       {data.nextAction !== null && (
-        <Card title={t('overview.nextAction')} meta={`${t('overview.route')} ${data.nextAction.routeId} · ${t('overview.beat')} ${data.nextAction.beat}`}>
-          <div className="pmwb-mono">{data.nextAction.command}</div>
-          <div className="pmwb-muted" style={{ marginTop: 6 }}>{data.nextAction.reason}</div>
+        <Card title={t('overview.nextAction')}>
+          <div>{data.nextAction.reason}</div>
+          <div className="pmwb-mono pmwb-muted" style={{ marginTop: 6 }}>{data.nextAction.command}</div>
         </Card>
       )}
-      <EnvelopeErrors errors={data.errors} />
     </div>
   )
 }
 
-/* ============================================================ Tasks (M2) */
+/* ============================================================ Tasks (M2, document-style) */
+
+interface AcceptanceRow { criterion?: string; claim?: string; claim_verdict?: string; satisfied?: boolean }
 
 function TasksPage(props: { t: Translate }): React.ReactElement {
   const { t } = props
@@ -208,26 +254,57 @@ function TasksPage(props: { t: Translate }): React.ReactElement {
   if (error !== null) return <div className="pmwb-err">{t('tab.tasks')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
   const review = isRec(data['review']) ? (data['review'] as AnyRecord) : null
+  const expected = isRec(review?.['expected']) ? (review?.['expected'] as AnyRecord) : null
+  const acceptance = Array.isArray(expected?.['acceptance']) ? (expected?.['acceptance'] as AcceptanceRow[]) : []
+  const verified = acceptance.filter((a) => a.satisfied === true).length
+  const intent = str(expected?.['intent'])
   const steps = Array.isArray(review?.['steps']) ? (review?.['steps'] as AnyRecord[]) : []
   return (
     <div>
       <div className="pmwb-actions"><button className="pmwb-btn" onClick={reload}>{t('common.refresh')}</button></div>
-      {review === null && <div className="pmwb-empty">{t('tasks.noView')}</div>}
-      {review !== null && (
+      <DocTitle summary="POMaster 工作台 · 客户端化插件" sub="这个任务在做什么、验收了没有，一页看完" />
+      {intent !== '—' && (
+        <Card title={t('doc.goal')}>
+          <p className="pmwb-para"><LongText text={intent} limit={90} /></p>
+        </Card>
+      )}
+      <Card title={t('tasks.acceptance')}>
+        <div className="pmwb-progress-row" style={{ marginBottom: 10 }}>
+          <span className="pmwb-muted">{t('tasks.acceptanceProgress')}</span>
+        </div>
+        <ProgressBar value={verified} total={acceptance.length} tone={verified === acceptance.length ? 'ok' : 'warn'} />
+        <div style={{ marginTop: 4 }}>
+          {verified === acceptance.length && acceptance.length > 0
+            ? <Badge tone="ok">{t('tasks.allVerified')}</Badge>
+            : <Badge tone="warn">{t('tasks.pending')}</Badge>}
+        </div>
+        <ul className="pmwb-check" style={{ marginTop: 10 }}>
+          {acceptance.map((a, i) => (
+            <li key={i}>
+              <span className="pmwb-check-mark" data-ok={String(a.satisfied === true)}>{a.satisfied === true ? '✓' : '…'}</span>
+              <div>
+                <div>{str(a['criterion'])}</div>
+                <div className="pmwb-muted">
+                  {a.satisfied === true ? t('tasks.verified') : t('tasks.pending')}
+                  {a['claim'] !== undefined && <span> · {str(a['claim'])}</span>}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      {steps.length > 0 && (
         <>
-          <Card title={`Task ${str(review['task'])}`}>
-            <KV rows={[[t('tasks.view'), str(review['view'])], [t('tasks.writeSurface'), str(review['write_surface'])]]} />
-          </Card>
+          <SectionTitle>{t('tasks.steps')}</SectionTitle>
           {steps.map((s, i) => (
-            <Card key={i} title={`${str(s['step'])}. ${str(s['title'])}`}>
+            <Card key={i} title={str(s['title'])}>
               <ul className="pmwb-list">
                 {(Array.isArray(s['lines']) ? (s['lines'] as unknown[]) : []).map((line, j) => (
-                  <li key={j}>{str(line)}</li>
+                  <li key={j}><LongText text={str(line)} limit={140} /></li>
                 ))}
               </ul>
             </Card>
           ))}
-          <JsonTree data={review} label="raw review packet" />
         </>
       )}
     </div>
@@ -249,38 +326,39 @@ function AttentionPage(props: { t: Translate }): React.ReactElement {
     ? ((data['alerts'] as AnyRecord)['alerts'] as AnyRecord[])
     : []
   const groups = Array.isArray(data['groups']) ? (data['groups'] as AnyRecord[]) : []
+  const nonEmpty = groups.filter((g) => Array.isArray(g['items']) && (g['items'] as unknown[]).length > 0)
   return (
     <div>
       <div className="pmwb-actions">
         <button className="pmwb-btn" onClick={reload}>{t('common.refresh')}</button>
         <span className="pmwb-muted">{t('attention.phase1')}</span>
       </div>
-      <Card title={t('attention.envelope', { n: alerts.length })}>
-        {alerts.length === 0 ? <div className="pmwb-empty">{t('common.clean')}</div> : (
-          <table className="pmwb-table">
-            <thead><tr><th>{t('attention.code')}</th><th>{t('attention.message')}</th><th>{t('attention.hint')}</th></tr></thead>
-            <tbody>
-              {alerts.map((a, i) => (
-                <tr key={i}>
-                  <td className="pmwb-mono">{str(a['code'])}</td>
-                  <td>{str(a['message'])}</td>
-                  <td className="pmwb-muted">{str(a['hint'])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
-      {groups.map((g, i) => {
-        const items = Array.isArray(g['items']) ? (g['items'] as AnyRecord[]) : []
-        return (
-          <Card key={i} title={str(g['label'])} meta={str(g['source_note'])}>
-            {items.length === 0 ? <div className="pmwb-empty">{t('common.empty')}</div> : (
-              <ul className="pmwb-list">{items.map((it, j) => <li key={j}>{str(it['summary'] ?? it['title'] ?? JSON.stringify(it))}</li>)}</ul>
-            )}
-          </Card>
-        )
-      })}
+      {alerts.length === 0 && nonEmpty.length === 0 ? (
+        <Card><div className="pmwb-empty">{t('common.clean')}</div></Card>
+      ) : (
+        <>
+          {alerts.length > 0 && (
+            <Card title={t('attention.envelope', { n: alerts.length })}>
+              <table className="pmwb-table">
+                <thead><tr><th>{t('attention.message')}</th><th>{t('attention.hint')}</th></tr></thead>
+                <tbody>
+                  {alerts.map((a, i) => (
+                    <tr key={i}>
+                      <td>{str(a['message'])}</td>
+                      <td className="pmwb-muted">{str(a['hint'])}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+          {nonEmpty.map((g, i) => (
+            <Card key={i} title={str(g['label'])}>
+              <ul className="pmwb-list">{(g['items'] as AnyRecord[]).map((it, j) => <li key={j}>{str(it['summary'] ?? it['title'] ?? JSON.stringify(it))}</li>)}</ul>
+            </Card>
+          ))}
+        </>
+      )}
     </div>
   )
 }
@@ -296,6 +374,7 @@ function KnowledgePage(props: { t: Translate }): React.ReactElement {
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
   const catalog = isRec(data['catalog']) ? (data['catalog'] as AnyRecord) : null
   const sections = isRec(catalog?.['sections']) ? (catalog?.['sections'] as AnyRecord) : {}
+  const sectionEntries = Object.entries(sections)
   const search = isRec(data['search']) ? (data['search'] as AnyRecord) : null
   const hits = Array.isArray(search?.['hits']) ? (search?.['hits'] as AnyRecord[]) : []
   return (
@@ -305,20 +384,14 @@ function KnowledgePage(props: { t: Translate }): React.ReactElement {
         <button className="pmwb-btn" onClick={() => setQuery(q)}>{t('common.search')}</button>
       </div>
       {catalog !== null && (
-        <Card title={t('knowledge.catalog')} meta={`${str(catalog['catalog_version'])} · ${t('knowledge.profile')} ${str(catalog['profile'])} · ${str(catalog['entries_total'])} ${t('knowledge.entries')}`}>
-          <table className="pmwb-table">
-            <tbody>
-              {Object.entries(sections).map(([k, v]) => (
-                <tr key={k}><td>{k}</td><td>{str(v)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="pmwb-muted" style={{ marginTop: 6 }}>
+        <Card title={t('knowledge.catalog')} meta={t('knowledge.humanVsAgent')}>
+          <StackedBar segments={sectionEntries.map(([k, v], i) => ({ label: k, value: v as number, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length] ?? '#52c41a' }))} total={catalog['entries_total'] as number} />
+          <div className="pmwb-muted" style={{ marginTop: 8 }}>
             {t('knowledge.lock')}: {str(isRec(catalog['lock_verification']) ? (catalog['lock_verification'] as AnyRecord)['ok'] : null)}
           </div>
         </Card>
       )}
-      <Card title={t('knowledge.hits', { q: str(data['query']) })} meta={t('knowledge.humanVsAgent')}>
+      <Card title={t('knowledge.hits', { q: str(data['query']) })}>
         {hits.length === 0 ? <div className="pmwb-empty">{t('common.empty')}</div> : (
           <ul className="pmwb-list">{hits.map((h, i) => <li key={i}>{str(h['id'] ?? h)}</li>)}</ul>
         )}
@@ -344,42 +417,34 @@ function RoutingPage(props: { t: Translate }): React.ReactElement {
       {manifest === null && <div className="pmwb-empty">{t('routing.noManifest')}</div>}
       {manifest !== null && (
         <>
-          <Card title={t('routing.budget')} meta={`${t('tab.routing')} ${str(check?.['role'])} · ${str(check?.['inputs_fingerprint']).slice(0, 24)}…`}>
+          <Card title={t('routing.budget')}>
             <KV rows={[
-              [t('routing.available'), str(isRec(check?.['counts']) ? (check?.['counts'] as AnyRecord)['available'] ?? t('common.none') : t('common.none'))],
               [t('routing.selected'), must.length],
-              [t('routing.injected'), str(isRec(check?.['counts']) ? (check?.['counts'] as AnyRecord)['injected'] ?? must.length : must.length)],
               [t('routing.advisory'), advisory.length],
-              [t('routing.zeroWrite'), 'true (--check)'],
             ]} />
           </Card>
           <Card title={t('routing.whySelected')}>
             {must.length === 0 ? <div className="pmwb-empty">{t('common.none')}</div> : (
-              <table className="pmwb-table">
-                <thead><tr><th>{t('routing.ref')}</th><th>{t('routing.why')}</th></tr></thead>
-                <tbody>
-                  {must.map((m, i) => (
-                    <tr key={i}><td className="pmwb-mono">{str(m['ref'])}</td><td>{str(m['reason'])}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+              <ul className="pmwb-check">
+                {must.map((m, i) => (
+                  <li key={i}>
+                    <span className="pmwb-check-mark" data-ok="true">✓</span>
+                    <div>
+                      <div className="pmwb-mono">{str(m['ref'])}</div>
+                      <div className="pmwb-muted">{str(m['reason'])}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </Card>
-          <Card title={t('routing.whyAdvisory')}>
-            {advisory.length === 0 ? <div className="pmwb-empty">{t('common.none')}</div> : (
-              <table className="pmwb-table">
-                <thead><tr><th>{t('routing.ref')}</th><th>{t('routing.why')}</th></tr></thead>
-                <tbody>
-                  {advisory.map((m, i) => (
-                    <tr key={i}><td className="pmwb-mono">{str(m['ref'])}</td><td>{str(m['reason'])}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          {advisory.length > 0 && (
+            <Card title={t('routing.whyAdvisory')}>
+              <ul className="pmwb-list">{advisory.map((m, i) => <li key={i}><span className="pmwb-mono">{str(m['ref'])}</span> — {str(m['reason'])}</li>)}</ul>
+            </Card>
+          )}
         </>
       )}
-      <JsonTree data={data} label="raw zero-write check output" />
     </div>
   )
 }
@@ -404,7 +469,6 @@ function TopologyPage(props: { t: Translate }): React.ReactElement {
       <div className="pmwb-actions">
         <input className="pmwb-input pmwb-mono" value={refInput} onChange={(e) => setRefInput(e.target.value)} />
         <button className="pmwb-btn" onClick={() => setRef(refInput)}>{t('common.query')}</button>
-        <span className="pmwb-muted">{t('topology.projection')}</span>
       </div>
       <Card title={t('topology.impact')}>
         <div>
@@ -435,13 +499,19 @@ function TopologyPage(props: { t: Translate }): React.ReactElement {
           )}
         </Card>
       </div>
-      <EnvelopeErrors errors={Array.isArray(data['impactErrors']) ? (data['impactErrors'] as Array<{ code: string; message: string }>) : []} />
-      <JsonTree data={data} label="raw graph output" />
     </div>
   )
 }
 
 /* ============================================================ Verification (M2) */
+
+const GATE_HUMAN_ORDER = ['BUILD', 'BROWSER', 'TYPECHECK', 'LINT', 'ARCHITECTURE', 'SECURITY', 'CONTRACT', 'COVERAGE', 'MUTATION', 'PERFORMANCE']
+
+function gateName(t: Translate, code: string): string {
+  const key = `verify.checkName.${code}`
+  const human = t(key)
+  return human === key ? code : human
+}
 
 function VerificationPage(props: { t: Translate }): React.ReactElement {
   const { t } = props
@@ -449,44 +519,66 @@ function VerificationPage(props: { t: Translate }): React.ReactElement {
   if (error !== null) return <div className="pmwb-err">{t('tab.verification')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
   const closeout = data['closeout'] as CommandEnvelope | null | undefined
-  const finalize = isRec(data['finalize']) ? (data['finalize'] as AnyRecord) : null
   const tools = isRec(data['tools']) ? (data['tools'] as AnyRecord) : null
   const bindings = Array.isArray(tools?.['bindings']) ? (tools?.['bindings'] as AnyRecord[]) : []
+  const gateCodes = new Set<string>([...GATE_HUMAN_ORDER])
+  for (const g of closeout?.errors ?? []) {
+    const m = /gate (\w+)/.exec(g.message)
+    if (m?.[1] !== undefined) gateCodes.add(m[1])
+  }
+  const failing = closeout === null || closeout === undefined || closeout.ok
+    ? []
+    : (closeout.errors.map((e) => /gate (\w+)/.exec(e.message)?.[1]).filter((x): x is string => x !== undefined))
+  const passed = [...gateCodes].filter((g) => !failing.includes(g)).length
+  const total = Math.max(gateCodes.size, 1)
   return (
     <div>
       <div className="pmwb-actions"><button className="pmwb-btn" onClick={reload}>{t('common.refresh')}</button></div>
-      <Card title={t('verification.dod')} meta={t('verification.matrix')}>
-        {closeout === null || closeout === undefined
-          ? <div className="pmwb-empty">{t('common.empty')}</div>
-          : closeout.ok
-            ? <Badge tone="ok">{t('verification.green')}</Badge>
-            : (
-              <>
-                <EnvelopeErrors errors={closeout.errors} />
-                <div className="pmwb-muted" style={{ marginTop: 6 }}>{t('verification.failclosed')}</div>
-              </>
-            )}
-      </Card>
-      <Card title={t('verification.bindings')}>
-        {bindings.length === 0 ? <div className="pmwb-empty">{t('verification.registryAbsent')}</div> : (
-          <table className="pmwb-table">
-            <thead><tr><th>binding</th><th>gate</th><th>detect</th><th>available</th></tr></thead>
-            <tbody>
-              {bindings.map((b, i) => (
-                <tr key={i}>
-                  <td className="pmwb-mono">{str(b['binding_id'])}</td>
-                  <td>{str(b['gate'])}</td>
-                  <td>{str(b['detect_status'])}</td>
-                  <td>{str(b['available'])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <DocTitle summary={t('verify.title')} />
+      <Card>
+        {closeout === null || closeout === undefined ? (
+          <div className="pmwb-empty">{t('common.empty')}</div>
+        ) : closeout.ok ? (
+          <>
+            <Badge tone="ok">{t('verify.yes')}</Badge>
+            <div style={{ marginTop: 10 }}><ProgressBar value={total} total={total} /></div>
+          </>
+        ) : failing.length === 0 ? (
+          <>
+            <Badge tone="warn">{t('verify.awaitingYou')}</Badge>
+            <div style={{ marginTop: 10 }}><ProgressBar value={passed} total={total} /></div>
+            <div style={{ marginTop: 8 }}><EnvelopeErrors errors={closeout.errors} /></div>
+          </>
+        ) : (
+          <>
+            <Badge tone="warn">{t('verify.no')}</Badge>
+            <div style={{ marginTop: 10, marginBottom: 4 }}><span className="pmwb-muted">{t('verify.gateProgress', { passed, total })}</span></div>
+            <ProgressBar value={passed} total={total} tone="warn" />
+            <div style={{ marginTop: 10 }}><EnvelopeErrors errors={closeout.errors} /></div>
+          </>
         )}
       </Card>
-      <Card title={t('verification.finalize')}>
-        <JsonTree data={finalize} label="finalize status output" />
-      </Card>
+      <SectionTitle>{t('verify.autoChecks')}</SectionTitle>
+      {bindings.length === 0 ? (
+        <Card><div className="pmwb-empty">{t('verify.noBindings')}</div></Card>
+      ) : (
+        <Card>
+          <ul className="pmwb-check">
+            {bindings.map((b, i) => {
+              const gate = str(b['gate'])
+              return (
+                <li key={i}>
+                  <span className="pmwb-check-mark" data-ok={String(b['available'] === true)}>{b['available'] === true ? '✓' : '…'}</span>
+                  <div>
+                    <div>{gateName(t, gate)}</div>
+                    <div className="pmwb-muted">{str(b['binding_id'])}</div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
+      )}
     </div>
   )
 }
@@ -498,14 +590,23 @@ function EvidencePage(props: { t: Translate }): React.ReactElement {
   const { data, error } = usePageData<AnyRecord>(() => getJSON('/api/pomaster/evidence'), [])
   if (error !== null) return <div className="pmwb-err">{t('tab.evidence')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
+  const indexRow = isRec(data['inspect']) && isRec((data['inspect'] as AnyRecord)['index_row'])
+    ? ((data['inspect'] as AnyRecord)['index_row'] as AnyRecord)
+    : null
+  const summary = isRec(indexRow?.['evidence_summary']) ? (indexRow?.['evidence_summary'] as AnyRecord) : null
+  const claims = typeof summary?.['claims'] === 'number' ? summary['claims'] : 0
+  const verified = typeof summary?.['verified'] === 'number' ? summary['verified'] : 0
   const ledger = isRec(data['ledger']) ? (data['ledger'] as AnyRecord) : null
   const entries = Array.isArray(ledger?.['entries']) ? (ledger?.['entries'] as AnyRecord[]) : []
   return (
     <div>
-      <Card title={t('evidence.lineage')} meta={t('evidence.lineageMeta')}>
-        <div className="pmwb-muted">{t('evidence.attached')}</div>
+      <DocTitle summary={t('evidence.title')} />
+      <Card title={t('evidence.claims', { n: claims, v: verified })}>
+        <ProgressBar value={verified} total={claims} tone={verified === claims ? 'ok' : 'warn'} />
+        <div style={{ marginTop: 6 }}>
+          <Badge tone={verified === claims ? 'ok' : 'warn'}>{verified}/{claims} {t('tasks.verified')}</Badge>
+        </div>
       </Card>
-      <JsonTree data={data['inspect']} label="inspect output" />
       <Card title={t('evidence.ledger')}>
         {entries.length === 0 ? <div className="pmwb-empty">{t('evidence.ledgerEmpty')}</div> : (
           <ul className="pmwb-list">{entries.map((e, i) => <li key={i}>{str(e['classification'])}: {str(e['statement'])}</li>)}</ul>
@@ -515,51 +616,141 @@ function EvidencePage(props: { t: Translate }): React.ReactElement {
   )
 }
 
-/* ============================================================ Components (M5) */
+/* ============================================================ Components (M5, explorer-style gallery) */
+
+function Swatch(props: { name: string; color: string }): React.ReactElement {
+  return (
+    <div>
+      <div className="sw-color" style={{ background: props.color }} />
+      <div className="sw-name">{props.name}<br />{props.color}</div>
+    </div>
+  )
+}
+
+type Sample = { name: string; render: React.ReactNode }
 
 function ComponentsPage(props: { t: Translate }): React.ReactElement {
   const { t } = props
   const [refInput, setRefInput] = useState('')
   const [ref, setRef] = useState('')
+  const [openCat, setOpenCat] = useState<string | null>(null)
   const { data, error } = usePageData<AnyRecord>(() => getJSON(`/api/pomaster/components?ref=${encodeURIComponent(ref)}`), [ref])
-  const studio = usePageData<{ react: { available: boolean; base: string }; startCommand: string }>(() => getJSON('/api/pomaster/studio-status'), [])
+  const theme = usePageData<{ tokens: Record<string, string> }>(() => getJSON('/api/pomaster/theme'), [])
   if (error !== null) return <div className="pmwb-err">{t('tab.components')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
   const catalog = isRec(data['catalog']) ? (data['catalog'] as AnyRecord) : null
   const sections = isRec(catalog?.['sections']) ? (catalog?.['sections'] as AnyRecord) : {}
   const archetypes = typeof sections['archetypes'] === 'number' ? sections['archetypes'] : 0
-  const studioAvailable = studio.data?.react.available === true
+
+  const samples: Record<string, Sample[]> = {
+    typography: [
+      { name: '标题 title', render: <div className="pmwb-doc-title">POMaster Workbench</div> },
+      { name: '小节标题 section', render: <SectionTitle>为什么入选</SectionTitle> },
+      { name: '正文 body', render: <p className="pmwb-para">这是一段正文示例：工作台把治理状态翻译成人能直接读懂的语言，不再需要打开命令行。</p> },
+      { name: '辅助说明 muted', render: <div className="pmwb-muted">辅助说明文字，比正文更弱一级。</div> },
+      { name: '代码 mono', render: <span className="pmwb-mono">pomaster status --json</span> },
+    ],
+    badges: [
+      { name: '通过 ok', render: <Badge tone="ok">confirmed</Badge> },
+      { name: '警告 warn', render: <Badge tone="warn">not_run</Badge> },
+      { name: '失败 bad', render: <Badge tone="bad">failed</Badge> },
+      { name: '中性 neutral', render: <Badge tone="neutral">PROPOSED</Badge> },
+    ],
+    buttons: [
+      { name: '默认 default', render: <button className="pmwb-btn">刷新</button> },
+      { name: '禁用 disabled', render: <button className="pmwb-btn" disabled>不可用</button> },
+      { name: '输入框 input', render: <input className="pmwb-input" placeholder="搜索…" readOnly /> },
+    ],
+    progress: [
+      { name: '进度 100%', render: <div style={{ width: 220 }}><ProgressBar value={5} total={5} /></div> },
+      { name: '进度 60%', render: <div style={{ width: 220 }}><ProgressBar value={3} total={5} tone="warn" /></div> },
+      { name: '占比条 stacked', render: <div style={{ width: 220 }}><StackedBar segments={[{ label: 'policies', value: 206, color: '#1677ff' }, { label: 'archetypes', value: 41, color: '#52c41a' }, { label: '其余', value: 23, color: '#faad14' }]} /></div> },
+    ],
+    tables: [
+      {
+        name: '数据表 table',
+        render: (
+          <table className="pmwb-table" style={{ minWidth: 300 }}>
+            <thead><tr><th>检查</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr><td>构建与单元测试</td><td><Badge tone="ok">passed</Badge></td></tr>
+              <tr><td>浏览器界面检查</td><td><Badge tone="ok">passed</Badge></td></tr>
+            </tbody>
+          </table>
+        ),
+      },
+    ],
+    cards: [
+      { name: '基础卡 card', render: <div style={{ width: 240 }}><Card title="项目"><div className="pmwb-muted">pomaster client · 20 对象</div></Card></div> },
+      { name: '错误提示 error', render: <div style={{ width: 240 }}><div className="pmwb-err">GATE_WARNING — 有检查项未全绿</div></div> },
+    ],
+    empty: [
+      { name: '空状态 empty', render: <div style={{ width: 200 }}><div className="pmwb-empty">干净——当前不需要人工介入</div></div> },
+    ],
+  }
+
+  const categoryMeta: Array<{ id: string; icon: string; nameKey: string }> = [
+    { id: 'typography', icon: '📝', nameKey: 'gallery.cat.typography' },
+    { id: 'badges', icon: '🏷️', nameKey: 'gallery.cat.badges' },
+    { id: 'buttons', icon: '🔘', nameKey: 'gallery.cat.buttons' },
+    { id: 'progress', icon: '📊', nameKey: 'gallery.cat.progress' },
+    { id: 'tables', icon: '📋', nameKey: 'gallery.cat.tables' },
+    { id: 'cards', icon: '🃏', nameKey: 'gallery.cat.cards' },
+    { id: 'empty', icon: '📂', nameKey: 'gallery.cat.empty' },
+    { id: 'palette', icon: '🎨', nameKey: 'gallery.cat.palette' },
+  ]
+
+  const themeTokens = theme.data?.tokens ?? {}
+  const colorSwatches = Object.entries(themeTokens).filter(([k]) => k.startsWith('color.'))
+
   return (
     <div>
-      <div className="pmwb-actions">
-        <input className="pmwb-input pmwb-mono" placeholder={t('components.explainPlaceholder')} value={refInput} onChange={(e) => setRefInput(e.target.value)} />
-        <button className="pmwb-btn" onClick={() => setRef(refInput)}>{t('common.query')}</button>
-      </div>
-      <Card title={t('components.model')} meta={t('components.meta')}>
-        <KV rows={[
-          [t('components.archetypes'), archetypes],
-          [t('knowledge.entries'), str(catalog?.['entries_total'])],
-          [t('knowledge.lock'), str(isRec(catalog?.['lock_verification']) ? (catalog?.['lock_verification'] as AnyRecord)['ok'] : null)],
-        ]} />
-      </Card>
-      {data['explain'] !== null && data['explain'] !== undefined && <JsonTree data={data['explain']} label={`catalog explain ${ref}`} />}
-      <SectionTitle>{t('components.storybook')}</SectionTitle>
-      {studio.data === null ? (
-        <div className="pmwb-empty">{t('common.loading')}</div>
-      ) : studioAvailable ? (
-        <div className="pmwb-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <iframe
-            src={`${studio.data.react.base}/?path=/`}
-            title="POMaster studio-react Storybook"
-            style={{ width: '100%', height: 720, border: 'none', display: 'block' }}
-          />
-        </div>
+      <DocTitle summary={t('gallery.title')} sub={t('gallery.meta')} />
+      {openCat === null ? (
+        <>
+          <div className="pmwb-gallery">
+            {categoryMeta.map((c) => (
+              <div key={c.id} className="pmwb-tile" onClick={() => setOpenCat(c.id)}>
+                <div className="pmwb-tile-icon">{c.icon}</div>
+                <div className="pmwb-tile-name">{t(c.nameKey)}</div>
+                {c.id === 'palette' && <div className="pmwb-tile-count">{colorSwatches.length} tokens</div>}
+              </div>
+            ))}
+          </div>
+          <SectionTitle>{t('components.model')}</SectionTitle>
+          <Card>
+            <KV rows={[
+              [t('components.archetypes'), archetypes],
+              [t('knowledge.entries'), str(catalog?.['entries_total'])],
+              [t('knowledge.lock'), str(isRec(catalog?.['lock_verification']) ? (catalog?.['lock_verification'] as AnyRecord)['ok'] : null)],
+            ]} />
+          </Card>
+        </>
       ) : (
-        <div className="pmwb-card">
-          <div style={{ marginBottom: 8 }}>{t('components.storybookOffline')}</div>
-          <div className="pmwb-mono pmwb-muted" style={{ marginBottom: 8 }}>{studio.data.startCommand}</div>
-          <button className="pmwb-btn" onClick={studio.reload}>{t('components.recheck')}</button>
-        </div>
+        <>
+          <div className="pmwb-breadcrumb">
+            <a onClick={() => setOpenCat(null)}>{t('gallery.all')}</a> / <b>{t(`gallery.cat.${openCat}`)}</b>
+          </div>
+          {openCat === 'palette' ? (
+            <div className="pmwb-swatch">
+              {colorSwatches.map(([k, v]) => <Swatch key={k} name={k} color={v} />)}
+            </div>
+          ) : (
+            <div className="pmwb-gallery">
+              {(samples[openCat] ?? []).map((s, i) => (
+                <div key={i} className="pmwb-tile" style={{ cursor: 'default' }}>
+                  <div className="pmwb-sample-frame">{s.render}</div>
+                  <div className="pmwb-sample-name">{s.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {ref !== '' && data['explain'] !== null && data['explain'] !== undefined && (
+            <Card title={`catalog explain · ${ref}`}>
+              <pre className="pmwb-pre">{JSON.stringify(data['explain'], null, 2)}</pre>
+            </Card>
+          )}
+        </>
       )}
     </div>
   )
@@ -605,10 +796,9 @@ function ActionsPage(props: { t: Translate }): React.ReactElement {
             <button className="pmwb-btn" onClick={() => { void run(a) }}>{t('common.run')}</button>
           </div>
           {results[a.id] !== undefined && (
-            <div>
+            <div style={{ marginTop: 6 }}>
               <Badge tone={results[a.id]!.ok ? 'ok' : 'bad'}>{results[a.id]!.ok ? t('common.ok') : t('common.rejected')}</Badge>
               <EnvelopeErrors errors={results[a.id]!.errors} />
-              {results[a.id]!.ok && <JsonTree data={results[a.id]!.result} label={t('common.result')} />}
             </div>
           )}
         </Card>

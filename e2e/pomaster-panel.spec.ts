@@ -2,11 +2,6 @@ import { expect, test } from '@playwright/test'
 
 const TOKEN = process.env.DSH_TOKEN ?? ''
 
-const TABS = [
-  'Overview', 'Tasks', 'Attention', 'Knowledge', 'Routing',
-  'Topology', 'Verification', 'Evidence', 'Components', 'Actions',
-]
-
 test('POMaster sidebar entry opens the Workbench panel', async ({ page }) => {
   await page.goto(`/?token=${TOKEN}`)
 
@@ -18,7 +13,8 @@ test('POMaster sidebar entry opens the Workbench panel', async ({ page }) => {
   // 2. Clicking it opens our own main-column surface (slot main, keyed panel).
   await entry.click()
   await expect(page.locator('.pmwb-tabs')).toBeVisible({ timeout: 15_000 })
-  await expect(page.locator('.pmwb')).toContainText('same-source contract with the pomaster CLI')
+  // 3. Same-source contract footer — locale-agnostic (zh 同源契约 / en same-source contract).
+  await expect(page.locator('.pmwb')).toContainText(/same-source contract|同源契约/)
 })
 
 test('every Workbench tab renders through the host data channel', async ({ page }) => {
@@ -26,20 +22,21 @@ test('every Workbench tab renders through the host data channel', async ({ page 
   const entry = page.getByRole('navigation', { name: /Global panels|全局面板/ }).getByRole('button', { name: /POMaster/ })
   await expect(entry).toBeVisible({ timeout: 30_000 })
   await entry.click()
-  await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible({ timeout: 30_000 })
+  const firstTab = page.locator('.pmwb-tab').first()
+  await expect(firstTab).toBeVisible({ timeout: 30_000 })
 
-  for (const label of TABS) {
-    await page.getByRole('tab', { name: label }).click()
-    // each page mounts a refresh action or content — assert no fetch-failure banner
+  // iterate tabs by index — labels are locale-dependent (zh/en)
+  const count = await page.locator('.pmwb-tab').count()
+  for (let i = 0; i < count; i++) {
+    await page.locator('.pmwb-tab').nth(i).click()
     await page.waitForTimeout(1200)
-    const body = page.locator('.pmwb')
-    await expect(body).toBeVisible()
+    await expect(page.locator('.pmwb')).toBeVisible()
     const fatal = page.locator('.pmwb-err', { hasText: /GET \/api|POST \/api|→ 404|→ 502/ })
     await expect(fatal).toHaveCount(0, { timeout: 3000 })
   }
 
-  // Overview shows real projected state (same-source contract)
-  await page.getByRole('tab', { name: 'Overview' }).click()
-  await expect(page.getByText('pomaster client')).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText('confirmed')).toBeVisible()
+  // Overview shows real projected state (language-independent values)
+  await page.locator('.pmwb-tab').first().click()
+  await expect(page.locator('.pmwb')).toContainText('pomaster client', { timeout: 10_000 })
+  await expect(page.locator('.pmwb')).toContainText('confirmed')
 })
