@@ -1,0 +1,30 @@
+{
+  "name": "@pomaster/workbench-model",
+  "version": "0.1.0-spike.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only projection layer (PRD §6 workbench-model): POMaster CLI --json envelopes → Workbench DTOs. Never invents state (PRD §61); integration channel is CLI subprocess --json (DECISION.DSH06).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pomaster/client-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

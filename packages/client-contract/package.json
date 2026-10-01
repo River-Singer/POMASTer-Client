@@ -1,0 +1,26 @@
+{
+  "name": "@pomaster/client-contract",
+  "version": "0.1.0-spike.0",
+  "private": true,
+  "type": "module",
+  "description": "Host-independent POMaster Workbench DTOs (PRD §6 client-contract) — the only shared types between workbench-model projections and host integrations. Zero runtime deps.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

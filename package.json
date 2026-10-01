@@ -1,0 +1,22 @@
+{
+  "name": "pomaster-client",
+  "version": "0.1.0-spike.0",
+  "private": true,
+  "type": "module",
+  "description": "POMaster Workbench client monorepo — client-contract / workbench-model / DeepSeek Harness integration (PRD: POMaster-Workbench-DeepSeek-Harness-Integration-PRD.md)",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build-all.mjs",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "esbuild": "0.28.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
