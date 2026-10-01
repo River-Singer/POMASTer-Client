@@ -27,10 +27,12 @@
 
 ## Recorded deviations from the PRD
 
-1. **§33 `*.changed` observables** — DSH `ctx.remote.$on` is a CLOSED forwarded-event allowlist (`packages/api/remotes/src/remote-events.ts`); external bundles cannot add `pomaster/*` events without forking. Restated per PRD §51: M1 chooses `@Remote({mode:'stream'})` follow vs `generation_seq` polling (DECISION.DSH08). Note DSH git-diff workspace-changes is blind to `.pomaster` (gitignored).
-2. **§36 batch-1 tools** — trimmed to read-only sub-forms (DECISION.DSH07): only `pomaster_project_overview` in PR-1; no plan/finalize/command.invoke (Phase-1 read-only DoD §64.16). `context compile` writes by default; only `--check` is zero-write — not exposed at all in PR-1.
-3. **§38 agent bootstrap injection** — session text embeds model-directed instruction blocks (POMaster `session.ts`), so bootstrap rides the TOOL result, not prompt injection. System-prompt extension point research deferred to M6 (DECISION.DSH09).
-4. **Node launcher quirk** — published `bin.js` gates on `import.meta.main` (Bun API; undefined under Node). Spike drives the exported `runCli()` from a wrapper script. Re-check on every DSH upgrade.
+1. **§33 `*.changed` observables + §34 data channel** — DSH `ctx.remote.$on` is a CLOSED forwarded-event allowlist (`packages/api/remotes/src/remote-events.ts`); external bundles cannot add `pomaster/*` events without forking. **M1 resolution (implemented)**: the data channel is authenticated Connection Fetch routes — `ctx.connection.fetch.register` (the public surface session-controller uses for `/api/file`), GET projections + POST typed-command allowlist; refresh = 10s polling on generation_seq (DECISION.DSH08). Typert typed remote remains the PRD-canonical evolution path (generator `@deepseek-ai/dsh-typert-generator@0.0.1-rc.1` exists on npm; package-mode via tsdown plugin — future research).
+2. **§36 batch tools** — implemented M6 batch (9 tools): overview / attention / next_action / context (zero-write `--check` only) / knowledge_search / topology_query / component_search / plan (closeout judge — never run) / finalize (status only). Authority note (§58): tools surface kernel adjudication; plan/finalize cannot bypass gates or the human ACCEPT receipt.
+3. **§38 agent bootstrap injection** — session text embeds model-directed instruction blocks (POMaster `session.ts`), so bootstrap rides TOOL results (neutral `status/alerts --json` data), not prompt injection. System-prompt extension point research deferred (DECISION.DSH09).
+4. **Node launcher quirk** — published `bin.js` gates on `import.meta.main` (Bun API; undefined under Node). Drive the exported `runCli()` from a wrapper. Re-check on every DSH upgrade.
+5. **Dual-half self-contained bundle layout** — root `.` export is a no-op placeholder (the `ui-*` client row imports it host-side); the controller lives at `./host` with its own patch row + config; class plugins declare `static inject` (module-level `inject` export is not read for class rows).
+6. **Windows/environment** — node-pty native build fails (no MSVC; PowerShell 5 lacks `||`) → `--ignore-scripts` install; `session-persistence-jsonl` then fails to import (7-entry session cascade) — environment constraint, unrelated to the bundle. Node 22.13 < DSH engines ^22.19 (works via the runCli driver).
 
 ## Spike workspace config (static, M6 supersedes)
 

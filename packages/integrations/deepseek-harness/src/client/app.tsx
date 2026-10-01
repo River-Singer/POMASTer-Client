@@ -310,7 +310,16 @@ function RoutingPage(): React.ReactElement {
       {manifest === null && <div className="pmwb-empty">no routing manifest (zero-write check) — see raw below</div>}
       {manifest !== null && (
         <>
-          <Card title="Why selected — must (spec routing, M3)" meta={`role ${str(check?.['role'])} · fingerprint ${str(check?.['inputs_fingerprint']).slice(0, 24)}…`}>
+          <Card title="Current task context budget (PRD §13)" meta={`role ${str(check?.['role'])} · fingerprint ${str(check?.['inputs_fingerprint']).slice(0, 24)}…`}>
+            <KV rows={[
+              ['Available specs', str(isRec(check?.['counts']) ? (check?.['counts'] as AnyRecord)['available'] ?? '—' : '—')],
+              ['Selected (must)', must.length],
+              ['Injected', str(isRec(check?.['counts']) ? (check?.['counts'] as AnyRecord)['injected'] ?? must.length : must.length)],
+              ['Advisory', advisory.length],
+              ['Zero-write', 'true (--check)'],
+            ]} />
+          </Card>
+          <Card title="Why selected — must (spec routing, M3)">
             {must.length === 0 ? <div className="pmwb-empty">none</div> : (
               <table className="pmwb-table">
                 <thead><tr><th>ref</th><th>why (reason)</th></tr></thead>
@@ -370,14 +379,22 @@ function TopologyPage(): React.ReactElement {
         </div>
       </Card>
       <div className="pmwb-grid2">
-        <Card title="Forward dependencies">
+        <Card title="Forward dependencies (edge type → target)">
           {forward.length === 0 ? <div className="pmwb-empty">none</div> : (
-            <ul className="pmwb-list">{forward.map((d, i) => <li key={i}>{str(d['id'] ?? JSON.stringify(d))}</li>)}</ul>
+            <ul className="pmwb-list">
+              {forward.map((d, i) => (
+                <li key={i}>{str(d['id'] ?? JSON.stringify(d))} {d['type'] !== undefined && <span className="pmwb-muted">via {str(d['type'])}</span>}</li>
+              ))}
+            </ul>
           )}
         </Card>
-        <Card title="Reverse dependents">
+        <Card title="Reverse dependents (who depends on this)">
           {reverse.length === 0 ? <div className="pmwb-empty">none</div> : (
-            <ul className="pmwb-list">{reverse.map((d, i) => <li key={i}>{str(d['id'] ?? JSON.stringify(d))}</li>)}</ul>
+            <ul className="pmwb-list">
+              {reverse.map((d, i) => (
+                <li key={i}>{str(d['id'] ?? JSON.stringify(d))} {d['type'] !== undefined && <span className="pmwb-muted">via {str(d['type'])}</span>}</li>
+              ))}
+            </ul>
           )}
         </Card>
       </div>
