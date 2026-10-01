@@ -42,8 +42,20 @@ const clientIntro = 'var module = { exports: {} }; var exports = module.exports;
 const clientFooter = 'return module.exports; } });'
 
 await build({
-  entryPoints: [src('host/index.ts')],
+  entryPoints: [src('index.ts')],
   outfile: out('index.js'),
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'node22',
+  external: nodeExternal,
+  sourcemap: true,
+  logLevel: 'info',
+})
+
+await build({
+  entryPoints: [src('host/index.ts')],
+  outfile: out('host.js'),
   bundle: true,
   format: 'esm',
   platform: 'node',

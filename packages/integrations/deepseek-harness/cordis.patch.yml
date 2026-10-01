@@ -1,4 +1,9 @@
 - insert:
+    - id: pomaster-host
+      name: '@pomaster/dsh-bundle/host'
+      config:
+        workspaceRoot: 'D:/Vscode Documents/pomaster client'
+        pomasterScriptPath: ''
     - id: pomaster-tools
       name: '@pomaster/dsh-bundle/tools'
       config:

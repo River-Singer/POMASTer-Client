@@ -1,15 +1,12 @@
 /**
- * POMaster Workbench web panel (PR-1 must-tier): a global main-column page +
- * sidebar entry, mirroring ui-plugin-manager's registration shape.
- * PR-1 scope note (DECISION.DSH03 tiered DoD): this panel is the static shell —
- * the data channel in the should-tier is the Typert remote (project.overview),
- * which depends on out-of-tree Typert codegen (undocumented; see
- * COMPATIBILITY-MATRIX.md). Until it lands, the panel routes Humans to the
- * pomaster_project_overview agent tool, which serves the same projection from
- * the same workbench-model source — never a second truth.
+ * POMaster Workbench web client (M2-M7): sidebar entry + keyed main surface
+ * hosting the multi-page WorkbenchApp. Mirrors ui-plugin-manager's registration
+ * shape (see COMPATIBILITY-MATRIX.md). Data flows through the host's
+ * authenticated Connection Fetch routes — the UI never touches .pomaster.
  */
 import React from 'react'
-import { PanelIcon, WorkbenchPanel } from './panel.tsx'
+import { WorkbenchApp } from './app.tsx'
+import { PanelIcon } from './panel.tsx'
 import { SLOT_MAIN, SLOT_SIDEBAR_PANELLIST, brandPanelId, type DshClientContext, type MainPanelId } from '../compatibility/dsh-api-surface.ts'
 
 export const NS = 'pomasterWorkbench'
@@ -35,7 +32,7 @@ export function apply(ctx: DshClientContext): void {
           key: PANEL_ID,
           locale: NS,
         },
-        WorkbenchPanel,
+        WorkbenchApp,
       ),
     )
 
