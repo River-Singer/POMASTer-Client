@@ -9,6 +9,7 @@
  * action maps to an EXISTING pomaster command with fixed argv shapes; the CLI
  * re-judges all authority (PRD §57 — the client is not a trust boundary).
  */
+import { readdir, readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import {
   buildProjectOverview,
@@ -37,6 +38,8 @@ export const inject = ['connection']
 
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : String(v))
 
 const notFound = (message: string): Response =>
   json({ ok: false, result: null, warnings: [], errors: [{ code: 'POMASTER_NOT_FOUND', message }] }, 404)
@@ -226,6 +229,88 @@ export class PomasterController {
     getRoute('/api/pomaster/actions', async () => ({
       actions: ACTION_ALLOWLIST.map((a) => ({ id: a.id, label: a.label, authorityNote: a.authorityNote, params: a.params })),
     }))
+
+    // ---- MASTer 实测：真实项目治理映射（全部白名单只读路径 + CLI --dir 投影） ----
+    const MASTER = 'D:/Vscode Documents/MASTer_master'
+    getRoute('/api/pomaster/master', async () => {
+      const masterRun = <T,>(args: string[]) => runPomasterJson<T>(args, { cwd: MASTER, scriptPath: this.config.pomasterScriptPath || undefined })
+      const [storeStatus, migrateAnalyze] = await Promise.all([
+        runPomasterJson<RawStatusResult>(['status'], { cwd: MASTER, scriptPath: this.config.pomasterScriptPath || undefined }),
+        runPomasterJson(['migrate', 'trellis-spec', '--analyze', '--spec-root', `${MASTER}/.trellis/spec`], { cwd: MASTER, scriptPath: this.config.pomasterScriptPath || undefined }).catch(() => null),
+      ])
+
+      // actual governance lives in Trellis task files — read them read-only
+      const tasksDir = `${MASTER}/.trellis/tasks`
+      let tasks: Array<Record<string, unknown>> = []
+      try {
+        const dirs = (await readdir(tasksDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name)
+        tasks = (await Promise.all(dirs.map(async (dir) => {
+          try {
+            const raw = await readFile(`${tasksDir}/${dir}/task.json`, 'utf8')
+            return JSON.parse(raw) as Record<string, unknown>
+          } catch {
+            return null
+          }
+        }))).filter((x): x is Record<string, unknown> => x !== null)
+      } catch { /* tasks dir absent */ }
+
+      let bpHead = ''
+      try {
+        const bp = await readFile(`${MASTER}/outputs/bp/BP-BLUEPRINT.md`, 'utf8')
+        bpHead = bp.split('\n').filter((l) => l.startsWith('#') || l.startsWith('- 蓝图') || l.startsWith('- 权威') || l.startsWith('- 生效')).slice(0, 6).join('\n')
+      } catch { /* bp absent */ }
+
+      let manifestLines = 0
+      try {
+        const manifest = await readFile(`${MASTER}/.trellis/spec/spec-manifest.jsonl`, 'utf8')
+        manifestLines = manifest.split(/\r?\n/).filter((l) => l.trim() !== '').length
+      } catch { /* manifest absent */ }
+
+      let specDirs: string[] = []
+      try {
+        specDirs = (await readdir(`${MASTER}/.trellis/spec`, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name)
+      } catch { /* spec absent */ }
+
+      const architecture = {
+        title: 'MASTer 整车成本分析前端（master-vehicle-cost-analysis）',
+        groups: [
+          { id: 'gov', title: '治理与规范（实际形态）', tone: '#722ed1', col: 1, nodes: [
+            { id: 'spec', title: '.trellis/spec', sub: `${specDirs.join(' / ') || '—'} · manifest ${manifestLines} 条` },
+            { id: 'tasks', title: '.trellis/tasks', sub: `${tasks.length} 个真实任务 · task.json/prd.md/jsonl` },
+            { id: 'bp', title: 'outputs/bp 蓝图', sub: 'BP-MASTER-FRONTEND-REFACTOR 1.4.0 · approved' },
+          ] },
+          { id: 'fe', title: '前端 Frontend（Feature-Sliced）', tone: '#1677ff', col: 2, nodes: [
+            { id: 'app', title: 'src/app' }, { id: 'pages', title: 'src/pages' }, { id: 'features', title: 'src/features' },
+            { id: 'entities', title: 'src/entities' }, { id: 'shared', title: 'src/shared' },
+          ] },
+          { id: 'pm', title: 'PoMaster 形态（kernel store）', tone: '#fa8c16', col: 3, nodes: [
+            { id: 'store', title: '.pomaster/state', sub: `CLI: ${String(storeStatus.result?.next_action?.route_id ?? '?')} · 0 objects（gap）` },
+            { id: 'roots', title: '.pomaster/output-roots.yaml', sub: 'output-root 策略覆盖（在用）' },
+            { id: 'migrate', title: 'migrate trellis-spec --analyze', sub: '官方迁移分析接口' },
+          ] },
+        ],
+        edges: [
+          { from: 'bp', to: 'tasks', label: '驱动任务' },
+          { from: 'spec', to: 'fe', label: '约束实现' },
+          { from: 'tasks', to: 'fe', label: '实现落地' },
+          { from: 'fe', to: 'store', label: '应映射入 store（gap）', dashed: true },
+        ],
+      }
+
+      const byStatus: Record<string, number> = {}
+      for (const task of tasks) {
+        const s = str(task['status']) || 'unknown'
+        byStatus[s] = (byStatus[s] ?? 0) + 1
+      }
+
+      return {
+        identity: { name: 'master-vehicle-cost-analysis', root: MASTER },
+        storeStatus: { ok: storeStatus.ok, routeId: storeStatus.result?.next_action?.route_id ?? null, generationSeq: storeStatus.result?.generation_seq ?? 0, objects: storeStatus.result?.objects ?? null },
+        migrateAnalyze: { ok: migrateAnalyze?.ok ?? false, result: migrateAnalyze?.result ?? null, errors: migrateAnalyze?.errors ?? [] },
+        trellis: { tasks, tasksByStatus: byStatus, bpHead, specDirs, manifestLines },
+        architecture,
+      }
+    })
 
     const commandDispose = connection.connection.fetch.register({
       path: '/api/pomaster/command',

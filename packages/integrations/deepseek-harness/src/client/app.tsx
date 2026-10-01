@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { getJSON, postCommand, type CommandEnvelope } from './api.ts'
 import { WORKBENCH_CSS } from './styles.ts'
 import type { Translate } from './i18n.ts'
+import { GroupDiagram, type DiagEdge, type DiagGroup } from './diagram.tsx'
 
 /* ============================================================ primitives */
 
@@ -195,6 +196,29 @@ interface OverviewData {
 
 const SEGMENT_COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16']
 
+/** Current-project architecture (pomaster client): what the Workbench actually is. */
+const CLIENT_ARCH: { groups: DiagGroup[]; edges: DiagEdge[] } = {
+  groups: [
+    { id: 'ui', title: 'DSH Web · Workbench 面板', tone: '#1677ff', col: 1, nodes: [
+      { id: 'panel', title: 'Workbench UI', sub: '10 页 · 语言跟随 · 设计预设' },
+      { id: 'tools', title: 'Agent Tools', sub: 'pomaster_* ×9' },
+    ] },
+    { id: 'host', title: 'DSH Host（插件层）', tone: '#722ed1', col: 2, nodes: [
+      { id: 'ctrl', title: 'PomasterController', sub: 'Connection Fetch 路由' },
+      { id: 'allow', title: 'Typed Actions', sub: 'M7 allowlist' },
+    ] },
+    { id: 'core', title: 'POMaster CLI / Kernel', tone: '#52c41a', col: 3, nodes: [
+      { id: 'cli', title: 'pomaster --json', sub: 'status/alerts/view/graph/closeout' },
+      { id: 'state', title: '.pomaster state', sub: '20 objects · seq 14' },
+    ] },
+  ],
+  edges: [
+    { from: 'panel', to: 'ctrl', label: 'fetch /api/pomaster/*' },
+    { from: 'tools', to: 'ctrl', label: 'inject' },
+    { from: 'ctrl', to: 'cli', label: 'subprocess --json' },
+  ],
+}
+
 function OverviewPage(props: { t: Translate }): React.ReactElement {
   const { t } = props
   const { data, error, reload } = usePageData<OverviewData>(() => getJSON('/api/pomaster/overview'), [])
@@ -240,6 +264,10 @@ function OverviewPage(props: { t: Translate }): React.ReactElement {
           <div className="pmwb-mono pmwb-muted" style={{ marginTop: 6 }}>{data.nextAction.command}</div>
         </Card>
       )}
+      <SectionTitle>{t('overview.architecture')}</SectionTitle>
+      <Card>
+        <GroupDiagram groups={CLIENT_ARCH.groups} edges={CLIENT_ARCH.edges} compact />
+      </Card>
     </div>
   )
 }
@@ -294,18 +322,20 @@ function TasksPage(props: { t: Translate }): React.ReactElement {
         </ul>
       </Card>
       {steps.length > 0 && (
-        <>
-          <SectionTitle>{t('tasks.steps')}</SectionTitle>
-          {steps.map((s, i) => (
-            <Card key={i} title={str(s['title'])}>
-              <ul className="pmwb-list">
-                {(Array.isArray(s['lines']) ? (s['lines'] as unknown[]) : []).map((line, j) => (
-                  <li key={j}><LongText text={str(line)} limit={140} /></li>
-                ))}
-              </ul>
-            </Card>
-          ))}
-        </>
+        <details className="pmwb-fold">
+          <summary>{t('tasks.steps')} · {steps.length}</summary>
+          <div className="pmwb-fold-body">
+            {steps.map((s, i) => (
+              <Card key={i} title={str(s['title'])}>
+                <ul className="pmwb-list">
+                  {(Array.isArray(s['lines']) ? (s['lines'] as unknown[]) : []).map((line, j) => (
+                    <li key={j}><LongText text={str(line)} limit={140} /></li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   )
@@ -456,47 +486,71 @@ function TopologyPage(props: { t: Translate }): React.ReactElement {
   const [refInput, setRefInput] = useState('TASK.DSH_WORKBENCH')
   const [ref, setRef] = useState('TASK.DSH_WORKBENCH')
   const { data, error } = usePageData<AnyRecord>(() => getJSON(`/api/pomaster/topology?ref=${encodeURIComponent(ref)}`), [ref])
+  const master = usePageData<AnyRecord>(() => getJSON('/api/pomaster/master'), [])
   if (error !== null) return <div className="pmwb-err">{t('tab.topology')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
-  const impact = isRec(data['impact']) ? (data['impact'] as AnyRecord) : null
-  const family = isRec(data['family']) ? (data['family'] as AnyRecord) : null
-  const root = isRec(impact?.['impact']) ? ((impact?.['impact'] as AnyRecord)['root'] as AnyRecord | undefined) : undefined
-  const affected = isRec(impact?.['impact']) ? ((impact?.['impact'] as AnyRecord)['affected'] as AnyRecord[] | undefined) ?? [] : []
-  const forward = Array.isArray(family?.['forward_dependencies']) ? (family?.['forward_dependencies'] as AnyRecord[]) : []
-  const reverse = Array.isArray(family?.['reverse_dependents']) ? (family?.['reverse_dependents'] as AnyRecord[]) : []
+  const masterArch = isRec(master.data?.['architecture']) ? (master.data?.['architecture'] as { title: string; groups: DiagGroup[]; edges: DiagEdge[] }) : null
   return (
     <div>
+      <SectionTitle>{t('topology.architecture')}</SectionTitle>
+      {masterArch !== null ? (
+        <Card meta={masterArch.title}>
+          <GroupDiagram groups={masterArch.groups} edges={masterArch.edges} />
+        </Card>
+      ) : (
+        <div className="pmwb-empty">{t('common.loading')}</div>
+      )}
+      <SectionTitle>{t('topology.impactQuery')}</SectionTitle>
       <div className="pmwb-actions">
         <input className="pmwb-input pmwb-mono" value={refInput} onChange={(e) => setRefInput(e.target.value)} />
         <button className="pmwb-btn" onClick={() => setRef(refInput)}>{t('common.query')}</button>
       </div>
       <Card title={t('topology.impact')}>
         <div>
-          {root !== undefined && <span className="pmwb-node" data-root="true">{str(root['id'])}</span>}
-          {affected.map((a, i) => <span key={i} className="pmwb-node">{str(a['id'] ?? JSON.stringify(a))}</span>)}
-          {affected.length === 0 && root !== undefined && (
-            <span className="pmwb-muted" style={{ marginLeft: 8 }}>{t('topology.noDownstream', { d: str(impact?.['max_depth']) })}</span>
-          )}
+          {(() => {
+            const impact = isRec(data['impact']) ? (data['impact'] as AnyRecord) : null
+            const root = isRec(impact?.['impact']) ? ((impact?.['impact'] as AnyRecord)['root'] as AnyRecord | undefined) : undefined
+            const affected = isRec(impact?.['impact']) ? ((impact?.['impact'] as AnyRecord)['affected'] as AnyRecord[] | undefined) ?? [] : []
+            return (
+              <>
+                {root !== undefined && <span className="pmwb-node" data-root="true">{str(root['id'])}</span>}
+                {affected.map((a, i) => <span key={i} className="pmwb-node">{str(a['id'] ?? JSON.stringify(a))}</span>)}
+                {affected.length === 0 && root !== undefined && (
+                  <span className="pmwb-muted" style={{ marginLeft: 8 }}>{t('topology.noDownstream', { d: str(impact?.['max_depth']) })}</span>
+                )}
+              </>
+            )
+          })()}
         </div>
       </Card>
       <div className="pmwb-grid2">
         <Card title={t('topology.forward')}>
-          {forward.length === 0 ? <div className="pmwb-empty">{t('common.none')}</div> : (
-            <ul className="pmwb-list">
-              {forward.map((d, i) => (
-                <li key={i}>{str(d['id'] ?? JSON.stringify(d))} {d['type'] !== undefined && <span className="pmwb-muted">via {str(d['type'])}</span>}</li>
-              ))}
-            </ul>
-          )}
+          {(() => {
+            const family = isRec(data['family']) ? (data['family'] as AnyRecord) : null
+            const forward = Array.isArray(family?.['forward_dependencies']) ? (family?.['forward_dependencies'] as AnyRecord[]) : []
+            if (forward.length === 0) return <div className="pmwb-empty">{t('common.none')}</div>
+            return (
+              <ul className="pmwb-list">
+                {forward.map((d, i) => (
+                  <li key={i}>{str(d['id'] ?? JSON.stringify(d))} {d['type'] !== undefined && <span className="pmwb-muted">via {str(d['type'])}</span>}</li>
+                ))}
+              </ul>
+            )
+          })()}
         </Card>
         <Card title={t('topology.reverse')}>
-          {reverse.length === 0 ? <div className="pmwb-empty">{t('common.none')}</div> : (
-            <ul className="pmwb-list">
-              {reverse.map((d, i) => (
-                <li key={i}>{str(d['id'] ?? JSON.stringify(d))} {d['type'] !== undefined && <span className="pmwb-muted">via {str(d['type'])}</span>}</li>
-              ))}
-            </ul>
-          )}
+          {(() => {
+            const family = isRec(data['family']) ? (data['family'] as AnyRecord) : null
+            const reverse = Array.isArray(family?.['reverse_dependents']) ? (family?.['reverse_dependents'] as AnyRecord[]) : []
+            if (reverse.length === 0) return <div className="pmwb-empty">{t('common.none')}</div>
+            return (
+              <ul className="pmwb-list">
+                {reverse.map((d, i) => (
+                  <li key={i}>{str(d['id'] ?? JSON.stringify(d))} {d['type'] !== undefined && <span className="pmwb-muted">via {str(d['type'])}</span>}</li>
+                ))}
+              </ul>
+            )
+          })()}
         </Card>
       </div>
     </div>
@@ -657,9 +711,16 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
       { name: '中性 neutral', render: <Badge tone="neutral">PROPOSED</Badge> },
     ],
     buttons: [
-      { name: '默认 default', render: <button className="pmwb-btn">刷新</button> },
+      { name: '主按钮 primary', render: <button className="pmwb-btn" style={{ background: 'var(--tk-color-brand-primary,#1677ff)', borderColor: 'var(--tk-color-brand-primary,#1677ff)', color: '#fff' }}>刷新</button> },
+      { name: '次按钮 default', render: <button className="pmwb-btn">刷新</button> },
+      { name: '危险 danger', render: <button className="pmwb-btn" style={{ borderColor: 'var(--tk-color-semantic-error,#ff4d4f)', color: 'var(--tk-color-semantic-error,#ff4d4f)' }}>删除</button> },
+      { name: '链接 link', render: <button className="pmwb-btn" style={{ border: 'none', background: 'none', color: 'var(--tk-color-brand-primary,#1677ff)', padding: '4px 6px' }}>展开全文</button> },
+      { name: '小尺寸 small', render: <button className="pmwb-btn" style={{ height: 'var(--tk-density-compact_control_height,24px)', padding: '2px 8px', fontSize: 12 }}>小按钮</button> },
+      { name: '大尺寸 large', render: <button className="pmwb-btn" style={{ height: 40, padding: '8px 20px', fontSize: 15 }}>大按钮</button> },
+      { name: '带图标 icon', render: <button className="pmwb-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4M2 14h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>导出</button> },
       { name: '禁用 disabled', render: <button className="pmwb-btn" disabled>不可用</button> },
       { name: '输入框 input', render: <input className="pmwb-input" placeholder="搜索…" readOnly /> },
+      { name: '开关 switch', render: <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}><span style={{ width: 36, height: 20, borderRadius: 999, background: 'var(--tk-color-brand-primary,#1677ff)', position: 'relative', display: 'inline-block' }}><span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%', background: '#fff' }} /></span>开启</label> },
     ],
     progress: [
       { name: '进度 100%', render: <div style={{ width: 220 }}><ProgressBar value={5} total={5} /></div> },
@@ -668,17 +729,43 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
     ],
     tables: [
       {
-        name: '数据表 table',
+        name: '数据表 grid',
         render: (
           <table className="pmwb-table" style={{ minWidth: 300 }}>
-            <thead><tr><th>检查</th><th>状态</th></tr></thead>
+            <thead><tr><th>检查</th><th>状态</th><th>证据</th></tr></thead>
             <tbody>
-              <tr><td>构建与单元测试</td><td><Badge tone="ok">passed</Badge></td></tr>
-              <tr><td>浏览器界面检查</td><td><Badge tone="ok">passed</Badge></td></tr>
+              <tr><td>构建与单元测试</td><td><Badge tone="ok">passed</Badge></td><td className="pmwb-mono">GRN-0006</td></tr>
+              <tr><td>浏览器界面检查</td><td><Badge tone="ok">passed</Badge></td><td className="pmwb-mono">GRN-0007</td></tr>
+              <tr><td>类型检查</td><td><Badge tone="warn">not_run</Badge></td><td className="pmwb-mono">—</td></tr>
             </tbody>
           </table>
         ),
       },
+      {
+        name: '栅格 grid-2col',
+        render: (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: 240 }}>
+            {[1, 2, 3, 4].map((n) => <div key={n} style={{ border: '1px solid var(--tk-color-border-default,#d9d9d9)', borderRadius: 6, padding: '8px 10px', fontSize: 12 }}>栅格 {n}</div>)}
+          </div>
+        ),
+      },
+    ],
+    layout: [
+      { name: '间距尺度 spacing', render: <div>{['xs', 'sm', 'md', 'lg', 'xl', 'xxl'].map((k) => <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}><span className="pmwb-muted" style={{ width: 30 }}>{k}</span><span style={{ height: 10, width: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 }[k as 'xs'] ?? 8, background: 'var(--tk-color-brand-primary,#1677ff)', borderRadius: 2, display: 'inline-block' }} /></div>)}</div> },
+      { name: '断点 breakpoints', render: <div>{[['sm', 576], ['md', 768], ['lg', 992], ['xl', 1200]].map(([k, w]) => <div key={k as string} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}><span className="pmwb-muted" style={{ width: 30 }}>{k}</span><span style={{ height: 10, width: `${(w as number) / 12}px`, maxWidth: 220, background: 'var(--tk-color-semantic-info,#1677ff)', borderRadius: 2, display: 'inline-block' }} /><span className="pmwb-muted">{w}</span></div>)}</div> },
+      { name: '卡片阴影 elevation', render: <div style={{ display: 'flex', gap: 8 }}><div style={{ width: 60, height: 40, borderRadius: 8, background: '#fff', boxShadow: 'var(--tk-elevation-card,none)', border: '1px solid var(--tk-color-border-subtle,#f0f0f0)' }} /><div style={{ width: 60, height: 40, borderRadius: 8, background: '#fff', boxShadow: 'var(--tk-elevation-popover,none)', border: '1px solid var(--tk-color-border-subtle,#f0f0f0)' }} /></div> },
+    ],
+    icons: [
+      { name: '功能图标集', render: (
+        <div className="pmwb-icon-row">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M2 8.5 6 12l8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <svg viewBox="0 0 16 16" fill="none"><path d="m3 3 10 10M13 3 3 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          <svg viewBox="0 0 16 16" fill="none"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <svg viewBox="0 0 16 16" fill="none"><path d="M2 3h12v10H2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /><path d="M2 6h12" stroke="currentColor" strokeWidth="1.5" /></svg>
+          <svg viewBox="0 0 16 16" fill="none"><path d="M8 1v14M2 5h12M2 11h12" stroke="currentColor" strokeWidth="1.4" /><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.4" /></svg>
+          <svg viewBox="0 0 16 16" fill="none"><ellipse cx="8" cy="3.5" rx="5.5" ry="2.2" stroke="currentColor" strokeWidth="1.4" /><path d="M2.5 3.5V12c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V3.5M2.5 7.75c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2" stroke="currentColor" strokeWidth="1.4" /></svg>
+        </div>
+      ) },
     ],
     cards: [
       { name: '基础卡 card', render: <div style={{ width: 240 }}><Card title="项目"><div className="pmwb-muted">pomaster client · 20 对象</div></Card></div> },
@@ -695,6 +782,8 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
     { id: 'buttons', icon: '🔘', nameKey: 'gallery.cat.buttons' },
     { id: 'progress', icon: '📊', nameKey: 'gallery.cat.progress' },
     { id: 'tables', icon: '📋', nameKey: 'gallery.cat.tables' },
+    { id: 'layout', icon: '📐', nameKey: 'gallery.cat.layout' },
+    { id: 'icons', icon: '✨', nameKey: 'gallery.cat.icons' },
     { id: 'cards', icon: '🃏', nameKey: 'gallery.cat.cards' },
     { id: 'empty', icon: '📂', nameKey: 'gallery.cat.empty' },
     { id: 'palette', icon: '🎨', nameKey: 'gallery.cat.palette' },
@@ -702,6 +791,21 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
 
   const themeTokens = theme.data?.tokens ?? {}
   const colorSwatches = Object.entries(themeTokens).filter(([k]) => k.startsWith('color.'))
+
+  /** Component props documentation (Storybook-style Args tables). */
+  const ARGS: Record<string, Array<{ name: string; type: string; def: string; desc: string }>> = {
+    buttons: [
+      { name: 'variant', type: 'primary | default | danger | link', def: 'default', desc: '视觉形态：主操作 / 常规 / 破坏性 / 链接' },
+      { name: 'size', type: 'small | middle | large', def: 'middle', desc: '尺寸（对应 density token 高度）' },
+      { name: 'icon', type: 'SVGElement', def: '—', desc: '前置图标（14px 线性 SVG）' },
+      { name: 'disabled', type: 'boolean', def: 'false', desc: '禁用态（透明度 .45 + 禁指针）' },
+    ],
+    tables: [
+      { name: 'columns', type: '{key,label}[]', def: '—', desc: '列定义（表头人话名）' },
+      { name: 'rows', type: 'Record[]', def: '—', desc: '数据行；单元格可渲染徽标/mono 文本' },
+      { name: 'bordered', type: 'boolean', def: 'true (subtle)', desc: '行分隔线使用 border-subtle token' },
+    ],
+  }
 
   return (
     <div>
@@ -744,6 +848,23 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
                 </div>
               ))}
             </div>
+          )}
+          {(openCat === 'buttons' || openCat === 'tables') && ARGS[openCat] !== undefined && (
+            <Card title={t('gallery.args')}>
+              <table className="pmwb-table">
+                <thead><tr><th>参数</th><th>类型</th><th>默认</th><th>说明</th></tr></thead>
+                <tbody>
+                  {ARGS[openCat].map((a, i) => (
+                    <tr key={i}>
+                      <td className="pmwb-mono">{a.name}</td>
+                      <td className="pmwb-mono pmwb-muted">{a.type}</td>
+                      <td className="pmwb-mono pmwb-muted">{a.def}</td>
+                      <td>{a.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
           )}
           {ref !== '' && data['explain'] !== null && data['explain'] !== undefined && (
             <Card title={`catalog explain · ${ref}`}>
@@ -807,6 +928,69 @@ function ActionsPage(props: { t: Translate }): React.ReactElement {
   )
 }
 
+/* ============================================================ MASTer field test (real-project mapping) */
+
+interface MasterPayload {
+  identity: { name: string; root: string }
+  storeStatus: { ok: boolean; routeId: string | null; generationSeq: number; objects: { total: number } | null }
+  migrateAnalyze: { ok: boolean; result: unknown; errors: Array<{ code: string; message: string }> }
+  trellis: { tasks: AnyRecord[]; tasksByStatus: Record<string, number>; bpHead: string; specDirs: string[]; manifestLines: number }
+  architecture: { title: string; groups: DiagGroup[]; edges: DiagEdge[] }
+}
+
+function MasterPage(props: { t: Translate }): React.ReactElement {
+  const { t } = props
+  const { data, error } = usePageData<MasterPayload>(() => getJSON('/api/pomaster/master'), [])
+  if (error !== null) return <div className="pmwb-err">{t('tab.master')}: {error}</div>
+  if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
+  const statusCounts = Object.entries(data.trellis.tasksByStatus)
+  const inProgress = data.trellis.tasksByStatus['in_progress'] ?? 0
+  return (
+    <div>
+      <DocTitle summary={`MASTer 实测 · ${data.identity.name}`} sub={data.identity.root} />
+      <Card title={t('master.actual')}>
+        <KV rows={[
+          [t('master.tasks'), `${data.trellis.tasks.length} 个` + (inProgress > 0 ? `（进行中 ${inProgress}）` : '')],
+          [t('master.spec'), `${data.trellis.specDirs.join(' / ')} · manifest ${data.trellis.manifestLines} 条`],
+          ['业务蓝图', data.trellis.bpHead !== '' ? 'BP-MASTER-FRONTEND-REFACTOR 1.4.0 · approved/effective' : '—'],
+          ...statusCounts.map(([s, n]) => ({ k: s, node: <span key={s}><Badge tone={toneFor(s === 'done' ? 'passed' : s)}>{s} × {n}</Badge></span> })).map(({ k, node }) => [k, node] as [string, React.ReactNode]),
+        ]} />
+        {data.trellis.bpHead !== '' && <pre className="pmwb-pre" style={{ marginTop: 8 }}>{data.trellis.bpHead}</pre>}
+        <div className="pmwb-muted" style={{ marginTop: 8 }}>{t('master.harness')}</div>
+      </Card>
+      <Card title={t('master.simulate')}>
+        <GroupDiagram groups={data.architecture.groups} edges={data.architecture.edges} compact />
+        <div className="pmwb-muted" style={{ marginTop: 8 }}>
+          {t('master.storeSeen')}: <span className="pmwb-mono">{data.storeStatus.routeId ?? '—'}</span> · {data.storeStatus.objects?.total ?? 0} {t('overview.objects')}
+        </div>
+      </Card>
+      <Card title={t('master.analyze')}>
+        {data.migrateAnalyze.ok ? (
+          <pre className="pmwb-pre">{JSON.stringify(data.migrateAnalyze.result, null, 2).slice(0, 3000)}</pre>
+        ) : (
+          <div>
+            <Badge tone="warn">{t('master.analyzeFail')}</Badge>
+            <EnvelopeErrors errors={data.migrateAnalyze.errors} />
+          </div>
+        )}
+      </Card>
+      <Card title={t('master.gap')}>
+        <ul className="pmwb-check">
+          <li><span className="pmwb-check-mark" data-ok="true">✓</span><div>output-root 策略覆盖已在用——文件级规范已对齐 PoMaster（.pomaster/output-roots.yaml）</div></li>
+          <li><span className="pmwb-check-mark" data-ok="true">✓</span><div>BP 蓝图机器编译且带 SHA 锚——权威链完整（approved/effective）</div></li>
+          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>{data.trellis.tasks.length} 个真实任务没有进 kernel store——没有 permit、没有八拍、没有证据闭环</div></li>
+          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>{data.trellis.manifestLines} 条 spec 没进 spec routing——本项目的 context compile 现在不可用</div></li>
+          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>BP 蓝图没有进 knowledge 面（CLI knowledge 检索总量为 0）</div></li>
+          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>CLI 视角 R_UNDETERMINED——治理权威未声明，插件投影只能看到空盘面</div></li>
+        </ul>
+        <div style={{ marginTop: 8 }}>
+          结论：先 <span className="pmwb-mono">pomaster init</span>，再 <span className="pmwb-mono">migrate trellis-spec --analyze → --apply</span> 把 Trellis/BP 形态升入 store——这正是官方迁移接口存在的意义。
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 /* ============================================================ shell */
 
 interface TabDef { id: string; labelKey: string; el: (t: Translate) => React.ReactElement }
@@ -818,6 +1002,7 @@ const TABS: TabDef[] = [
   { id: 'knowledge', labelKey: 'tab.knowledge', el: (t) => <KnowledgePage t={t} /> },
   { id: 'routing', labelKey: 'tab.routing', el: (t) => <RoutingPage t={t} /> },
   { id: 'topology', labelKey: 'tab.topology', el: (t) => <TopologyPage t={t} /> },
+  { id: 'master', labelKey: 'tab.master', el: (t) => <MasterPage t={t} /> },
   { id: 'verification', labelKey: 'tab.verification', el: (t) => <VerificationPage t={t} /> },
   { id: 'evidence', labelKey: 'tab.evidence', el: (t) => <EvidencePage t={t} /> },
   { id: 'components', labelKey: 'tab.components', el: (t) => <ComponentsPage t={t} /> },

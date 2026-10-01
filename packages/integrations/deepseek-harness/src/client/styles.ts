@@ -92,4 +92,23 @@ export const WORKBENCH_CSS = `
 .pmwb-swatch > div { border: 1px solid var(--tk-color-border-subtle, #f0f0f0); border-radius: var(--tk-radius-md, 6px); overflow: hidden; font-size: 11px; }
 .pmwb-swatch .sw-color { height: 44px; }
 .pmwb-swatch .sw-name { padding: 4px 8px; color: var(--tk-color-text-secondary, rgba(0,0,0,.65)); word-break: break-all; }
+
+/* --- collapsible sections (task detail) --- */
+.pmwb-fold { border: 1px solid var(--tk-color-border-default, #d9d9d9); border-radius: var(--tk-radius-lg, 8px); background: var(--tk-color-surface-container, #ffffff); margin: var(--tk-spacing-sm, 8px) 0; }
+.pmwb-fold > summary { cursor: pointer; padding: 10px var(--tk-spacing-md, 12px); font-weight: var(--tk-typography-weight-semibold, 600); font-size: 13.5px; list-style: none; display: flex; align-items: center; gap: 8px; }
+.pmwb-fold > summary::before { content: '▸'; transition: transform var(--tk-motion-fast, .1s); color: var(--tk-color-text-tertiary, rgba(0,0,0,.45)); }
+.pmwb-fold[open] > summary::before { transform: rotate(90deg); }
+.pmwb-fold > .pmwb-fold-body { padding: 0 var(--tk-spacing-md, 12px) var(--tk-spacing-md, 12px); }
+
+/* --- sample frames must never overflow their tile --- */
+.pmwb-sample-frame { align-items: stretch; }
+.pmwb-sample-frame .pmwb-input { min-width: 0; width: 100%; max-width: 200px; }
+.pmwb-sample-frame .pmwb-table { min-width: 0; }
+
+/* --- component args documentation --- */
+.pmwb-args-title { font-size: 12px; color: var(--tk-color-text-tertiary, rgba(0,0,0,.45)); margin: 8px 0 4px; font-family: var(--tk-typography-family-mono, Consolas, monospace); }
+
+/* --- icon tiles (SVG set) --- */
+.pmwb-icon-row { display: flex; gap: var(--tk-spacing-sm, 8px); flex-wrap: wrap; }
+.pmwb-icon-row svg { width: 26px; height: 26px; display: block; color: var(--tk-color-brand-primary, #1677ff); }
 `
