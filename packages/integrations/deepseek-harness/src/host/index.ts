@@ -202,6 +202,27 @@ export class PomasterController {
       return { tokens, denominator: preview.result?.denominator ?? null }
     })
 
+    getRoute('/api/pomaster/studio-status', async () => {
+      // Probe the local studio-react Storybook dev server (port 6007) so the
+      // Components page can embed it live or show start guidance.
+      const probe = async (port: number): Promise<boolean> => {
+        try {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 1500)
+          const response = await fetch(`http://127.0.0.1:${port}/index.html`, { signal: controller.signal })
+          clearTimeout(timer)
+          return response.ok
+        } catch {
+          return false
+        }
+      }
+      const react = await probe(6007)
+      return {
+        react: { available: react, base: `http://127.0.0.1:6007` },
+        startCommand: 'cd POMaster_VNext && corepack pnpm studio:react:dev',
+      }
+    })
+
     getRoute('/api/pomaster/actions', async () => ({
       actions: ACTION_ALLOWLIST.map((a) => ({ id: a.id, label: a.label, authorityNote: a.authorityNote, params: a.params })),
     }))

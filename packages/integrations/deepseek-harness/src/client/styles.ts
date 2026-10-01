@@ -6,6 +6,8 @@
 
 export const WORKBENCH_CSS = `
 .pmwb {
+  width: 100%;
+  box-sizing: border-box;
   font-family: var(--tk-typography-family-sans, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
   font-size: var(--tk-typography-size-body, 14px);
   line-height: var(--tk-typography-line-height-normal, 1.57);

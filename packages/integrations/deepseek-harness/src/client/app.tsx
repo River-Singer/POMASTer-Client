@@ -89,6 +89,10 @@ function usePageData<T>(fetcher: () => Promise<T>, deps: React.DependencyList): 
 
 const str = (v: unknown): string => (v === undefined || v === null ? '—' : typeof v === 'string' ? v : JSON.stringify(v))
 
+function SectionTitle(props: { children: React.ReactNode }): React.ReactElement {
+  return <div className="pmwb-sec-title">{props.children}</div>
+}
+
 /* ============================================================ design tokens (POMaster preset) */
 
 interface ThemePayload { tokens: Record<string, string> }
@@ -518,11 +522,13 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
   const [refInput, setRefInput] = useState('')
   const [ref, setRef] = useState('')
   const { data, error } = usePageData<AnyRecord>(() => getJSON(`/api/pomaster/components?ref=${encodeURIComponent(ref)}`), [ref])
+  const studio = usePageData<{ react: { available: boolean; base: string }; startCommand: string }>(() => getJSON('/api/pomaster/studio-status'), [])
   if (error !== null) return <div className="pmwb-err">{t('tab.components')}: {error}</div>
   if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
   const catalog = isRec(data['catalog']) ? (data['catalog'] as AnyRecord) : null
   const sections = isRec(catalog?.['sections']) ? (catalog?.['sections'] as AnyRecord) : {}
   const archetypes = typeof sections['archetypes'] === 'number' ? sections['archetypes'] : 0
+  const studioAvailable = studio.data?.react.available === true
   return (
     <div>
       <div className="pmwb-actions">
@@ -535,11 +541,26 @@ function ComponentsPage(props: { t: Translate }): React.ReactElement {
           [t('knowledge.entries'), str(catalog?.['entries_total'])],
           [t('knowledge.lock'), str(isRec(catalog?.['lock_verification']) ? (catalog?.['lock_verification'] as AnyRecord)['ok'] : null)],
         ]} />
-        <div className="pmwb-muted" style={{ marginTop: 8 }}>
-          <span className="pmwb-mono">corepack pnpm studio:dev</span> · <span className="pmwb-mono">studio:react:dev</span>
-        </div>
       </Card>
       {data['explain'] !== null && data['explain'] !== undefined && <JsonTree data={data['explain']} label={`catalog explain ${ref}`} />}
+      <SectionTitle>{t('components.storybook')}</SectionTitle>
+      {studio.data === null ? (
+        <div className="pmwb-empty">{t('common.loading')}</div>
+      ) : studioAvailable ? (
+        <div className="pmwb-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <iframe
+            src={`${studio.data.react.base}/?path=/`}
+            title="POMaster studio-react Storybook"
+            style={{ width: '100%', height: 720, border: 'none', display: 'block' }}
+          />
+        </div>
+      ) : (
+        <div className="pmwb-card">
+          <div style={{ marginBottom: 8 }}>{t('components.storybookOffline')}</div>
+          <div className="pmwb-mono pmwb-muted" style={{ marginBottom: 8 }}>{studio.data.startCommand}</div>
+          <button className="pmwb-btn" onClick={studio.reload}>{t('components.recheck')}</button>
+        </div>
+      )}
     </div>
   )
 }

@@ -55,6 +55,9 @@ export const ZH: WorkbenchDict = {
   'components.model': 'Reference → Adopted → Customized（PRD §20）',
   'components.meta': 'POMaster studio 画廊为生成的参考件（不可导入）；工作台自建表面，画廊仅作 design-token / archetype 参考。',
   'components.archetypes': 'Archetype 卡片', 'components.explainPlaceholder': 'catalog explain <ref>',
+  'components.storybook': 'Reference Storybook（studio-react 实时嵌入）',
+  'components.storybookOffline': '本地 Storybook（studio-react，端口 6007）未启动——启动后点「重新检测」即可内嵌浏览：',
+  'components.recheck': '重新检测',
   // actions
   'actions.title': '变更操作',
   // footer
@@ -101,6 +104,9 @@ export const EN: WorkbenchDict = {
   'components.model': 'Reference → Adopted → Customized (PRD §20)',
   'components.meta': 'POMaster studio galleries are generated references (not importable); the Workbench builds its own surface and treats galleries as design-token/archetype reference.',
   'components.archetypes': 'Archetype cards', 'components.explainPlaceholder': 'catalog explain <ref>',
+  'components.storybook': 'Reference Storybook (studio-react, live embed)',
+  'components.storybookOffline': 'Local Storybook (studio-react, port 6007) is not running — start it and hit Re-check to browse it inline:',
+  'components.recheck': 'Re-check',
   'actions.title': 'Mutation actions',
   'footer.note': 'POMaster Workbench · read-only projection surface · same-source contract with the pomaster CLI · @pomaster/dsh-bundle',
 }
