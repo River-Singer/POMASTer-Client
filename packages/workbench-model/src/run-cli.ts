@@ -93,7 +93,7 @@ export function parseEnvelope(raw: string): PomasterEnvelope<unknown> {
 }
 
 /** Run one read-only pomaster command and resolve its §45 envelope. Never throws for CLI failures — failures ride the envelope. */
-export function runPomasterJson(args: readonly string[], opts: PomasterCliOptions): Promise<PomasterEnvelope<unknown>> {
+export function runPomasterJson<T = unknown>(args: readonly string[], opts: PomasterCliOptions): Promise<PomasterEnvelope<T>> {
   const fullArgs = ensureJsonArg(args)
   const spec = buildSpawnSpec(fullArgs, opts)
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
@@ -150,7 +150,7 @@ export function runPomasterJson(args: readonly string[], opts: PomasterCliOption
       settled = true
       clearTimeout(timer)
       const rawStdout = Buffer.concat(stdout).toString('utf8')
-      const envelope = parseEnvelope(rawStdout)
+      const envelope = parseEnvelope(rawStdout) as PomasterEnvelope<T>
       if (!envelope.ok && stderr.length > 0 && envelope.errors.length === 0) {
         envelope.errors.push({
           code: 'POMASTER_CLI_STDERR',

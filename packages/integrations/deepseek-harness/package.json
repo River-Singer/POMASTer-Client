@@ -1,6 +1,6 @@
 {
   "name": "@pomaster/dsh-bundle",
-  "description": "POMaster Workbench integration for DeepSeek Harness (PR-1 spike): host service + read-only pomaster_project_overview agent tool + web panel entry. No fork, no DSH core patches — profile-layer bundle only (PRD §4/§31).",
+  "description": "POMaster Workbench integration for DeepSeek Harness (PR-1 spike): read-only pomaster_project_overview agent tool + web panel entry. No fork, no DSH core patches — profile-layer bundle only (PRD §4/§31). Zero @deepseek-ai imports by design (compatibility layer), so the profile needs no peer resolution.",
   "version": "0.1.0-spike.0",
   "private": true,
   "type": "module",
@@ -32,18 +32,13 @@
     }
   },
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "test": "node scripts/build.mjs --dry"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/schemastery": "*",
-    "@deepseek-ai/dsh-tools": "*"
-  },
-  "dependencies": {
-    "@pomaster/workbench-model": "workspace:*"
+    "build": "node scripts/build.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.28.2"
+    "@pomaster/client-contract": "workspace:*",
+    "@pomaster/workbench-model": "workspace:*",
+    "@types/react": "~18.3.1",
+    "esbuild": "0.28.2",
+    "typescript": "^5.7.3"
   }
 }

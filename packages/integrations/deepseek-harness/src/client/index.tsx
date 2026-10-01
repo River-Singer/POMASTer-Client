@@ -9,6 +9,7 @@
  * the same workbench-model source — never a second truth.
  */
 import React from 'react'
+import { PanelIcon, WorkbenchPanel } from './panel.tsx'
 import { SLOT_MAIN, SLOT_SIDEBAR_PANELLIST, brandPanelId, type DshClientContext, type MainPanelId } from '../compatibility/dsh-api-surface.ts'
 
 export const NS = 'pomasterWorkbench'
@@ -23,30 +24,37 @@ const zh = { panel: 'POMaster 工作台' }
 const en = { panel: 'POMaster Workbench' }
 
 export function apply(ctx: DshClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }))
-  const t = ctx.locale.bind(NS)
+  try {
+    ctx.effect(() => ctx.locale.register(NS, { zh, en }))
+    const t = ctx.locale.bind(NS)
 
-  ctx.slots.inject(SLOT_MAIN, () =>
-    ctx.slots.register(
-      {
-        name: SLOT_MAIN,
-        key: PANEL_ID,
-        locale: NS,
-      },
-      WorkbenchPanel,
-    ),
-  )
+    ctx.slots.inject(SLOT_MAIN, () =>
+      ctx.slots.register(
+        {
+          name: SLOT_MAIN,
+          key: PANEL_ID,
+          locale: NS,
+        },
+        WorkbenchPanel,
+      ),
+    )
 
-  ctx.slots.inject(SLOT_SIDEBAR_PANELLIST, () =>
-    ctx.slots.register(
-      {
-        name: SLOT_SIDEBAR_PANELLIST,
-        id: PANEL_ID,
-        order: 42,
-        label: () => t('panel'),
-        locale: NS,
-      },
-      PanelIcon,
-    ),
-  )
+    ctx.slots.inject(SLOT_SIDEBAR_PANELLIST, () =>
+      ctx.slots.register(
+        {
+          name: SLOT_SIDEBAR_PANELLIST,
+          id: PANEL_ID,
+          order: 42,
+          label: () => t('panel'),
+          locale: NS,
+        },
+        PanelIcon,
+      ),
+    )
+  } catch (error) {
+    const w = window as unknown as { __pomasterBootError?: string }
+    w.__pomasterBootError = String((error as Error)?.stack ?? error)
+    console.error('[pomaster] client apply failed:', error)
+    throw error
+  }
 }

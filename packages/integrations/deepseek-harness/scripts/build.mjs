@@ -17,12 +17,22 @@
  *                     purity gate satisfied by construction.
  */
 import { build } from 'esbuild'
+import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = (p) => join(packageRoot, 'src', p)
 const out = (p) => join(packageRoot, 'dist', p)
+
+// Type gate first (esbuild strips types without checking — the missing-import
+// class of bug only surfaces at runtime otherwise).
+const tsc = join(packageRoot, 'node_modules', 'typescript', 'bin', 'tsc')
+const check = spawnSync(process.execPath, [tsc, '-p', join(packageRoot, 'tsconfig.json')], { stdio: 'inherit' })
+if (check.status !== 0) {
+  console.error('bundle build: type gate failed')
+  process.exit(1)
+}
 
 const nodeExternal = ['@deepseek-ai/cordis', '@deepseek-ai/schemastery', '@deepseek-ai/dsh-tools']
 
@@ -65,14 +75,13 @@ await build({
   external: ['react', 'react-dom'],
   jsx: 'transform',
   jsxFactory: 'React.createElement',
-  jsxFragmentFactory: 'React.Fragment',
+  jsxFragment: 'React.Fragment',
   define: {
     'process.env.NODE_ENV': '"production"',
     'import.meta.env.MODE': '"production"',
     'import.meta.env': '{"MODE":"production"}',
   },
-  banner: { js: clientBanner },
-  intro: clientIntro,
+  banner: { js: `${clientIntro}\n${clientBanner}` },
   footer: { js: clientFooter },
   sourcemap: true,
   logLevel: 'info',

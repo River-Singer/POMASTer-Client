@@ -22,7 +22,8 @@ export interface CliWarning {
 export interface PomasterEnvelope<T = unknown> {
   command: string
   ok: boolean
-  result: T
+  /** null on unhandled CLI errors (verified: runCli emits result:null with UNEXPECTED_ERROR). */
+  result: T | null
   warnings: CliWarning[]
   errors: CliError[]
 }
