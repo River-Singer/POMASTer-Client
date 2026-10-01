@@ -30,6 +30,12 @@ export interface SlotDecl {
   children?: Record<string, { kind: string; scope?: string }>
 }
 
+export interface LocaleSnapshot {
+  active: string
+  locales: Array<{ id: string; label?: string }>
+  revision: number
+}
+
 export interface DshClientContext {
   slots: {
     inject(ownerSlot: string, registration: () => unknown): void
@@ -38,6 +44,9 @@ export interface DshClientContext {
   locale: {
     register(namespace: string, dictionaries: Record<string, Record<string, string>>): () => void
     bind(namespace: string): (key: string) => string
+    /** LocaleFace reactivity (0.2.0-rc.2): snapshot + subscribe; optional on older builds. */
+    getSnapshot?(): LocaleSnapshot
+    subscribe?(fn: () => void): () => void
   }
   effect(dispose: () => () => void, name?: string): void
 }

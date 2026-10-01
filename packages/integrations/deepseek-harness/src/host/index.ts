@@ -190,6 +190,18 @@ export class PomasterController {
       return { catalog, explain }
     })
 
+    getRoute('/api/pomaster/theme', async () => {
+      // Canonical POMaster design-token presets (baseline asset, official seeded theme).
+      const preview = await run<{
+        entries?: Array<{ key: string; preset_value: string; current_value: string }>
+        denominator?: Record<string, unknown>
+      }>(['preset', 'preview', '--family', 'design-tokens'])
+      const entries = preview.result?.entries ?? []
+      const tokens: Record<string, string> = {}
+      for (const e of entries) tokens[e.key] = e.current_value ?? e.preset_value
+      return { tokens, denominator: preview.result?.denominator ?? null }
+    })
+
     getRoute('/api/pomaster/actions', async () => ({
       actions: ACTION_ALLOWLIST.map((a) => ({ id: a.id, label: a.label, authorityNote: a.authorityNote, params: a.params })),
     }))
