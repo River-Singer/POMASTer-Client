@@ -13,8 +13,11 @@ export const WORKBENCH_CSS = `
   line-height: var(--tk-typography-line-height-normal, 1.57);
   color: var(--tk-color-text-primary, rgba(0, 0, 0, 0.88));
   padding: var(--tk-spacing-lg, 16px) var(--tk-spacing-lg, 16px) 64px;
+  /* the DSH main column is overflow:hidden — the panel must scroll itself */
+  height: calc(100vh - var(--tk-layout-header-height, 64px) - 24px);
+  overflow-y: auto;
 }
-.pmwb-tabs { display: flex; flex-wrap: wrap; gap: var(--tk-spacing-xs, 4px); border-bottom: 1px solid var(--tk-color-border-subtle, #f0f0f0); margin-bottom: var(--tk-spacing-md, 12px); }
+.pmwb-tabs { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: var(--tk-spacing-xs, 4px); border-bottom: 1px solid var(--tk-color-border-subtle, #f0f0f0); margin-bottom: var(--tk-spacing-md, 12px); background: var(--tk-color-surface-page, #ffffff); }
 .pmwb-tab { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; padding: var(--tk-spacing-sm, 8px) var(--tk-spacing-md, 12px); font: inherit; font-size: 13px; cursor: pointer; opacity: .72; color: inherit; transition: color var(--tk-motion-fast, .1s); }
 .pmwb-tab[data-active="true"] { border-bottom-color: var(--tk-color-brand-primary, #1677ff); opacity: 1; font-weight: var(--tk-typography-weight-semibold, 600); color: var(--tk-color-brand-primary, #1677ff); }
 .pmwb-tab:hover { opacity: 1; }
