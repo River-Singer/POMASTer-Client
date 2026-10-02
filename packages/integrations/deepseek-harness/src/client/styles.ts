@@ -79,8 +79,8 @@ export const WORKBENCH_CSS = `
 .pmwb-check .pmwb-check-mark[data-ok="false"] { background: #fffbeb; color: #b45309; }
 
 /* --- explorer gallery --- */
-.pmwb-gallery { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
-.pmwb-tile { flex: 0 0 auto; min-width: 230px; max-width: 100%; border: 1px solid #e5e7eb; border-radius: 9px; background: #ffffff; cursor: pointer; text-align: center; padding: 12px 14px; transition: border-color .12s ease, box-shadow .12s ease; }
+.pmwb-gallery { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+.pmwb-tile { flex: 0 0 auto; min-width: 230px; min-height: 132px; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #e5e7eb; border-radius: 9px; background: #ffffff; cursor: pointer; text-align: center; padding: 12px 14px; transition: border-color .12s ease, box-shadow .12s ease; }
 .pmwb-tile:hover { border-color: #d1d5db; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 .pmwb-tile .pmwb-tile-icon { color: #374151; }
 .pmwb-tile .pmwb-tile-name { font-size: 12.5px; margin-top: 6px; color: #111827; word-break: break-word; }
