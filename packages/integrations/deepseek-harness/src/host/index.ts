@@ -220,14 +220,12 @@ export class PomasterController {
         }
       }
       const react = await probe(6007)
-      let stories: Array<{ id: string; title: string; name: string }> = []
+      let stories: Array<{ id: string; title: string; name: string; type: string }> = []
       if (react) {
         try {
           const response = await fetch('http://127.0.0.1:6007/index.json')
           const index = (await response.json()) as { entries?: Record<string, { id: string; title: string; name?: string; type?: string }> }
-          stories = Object.values(index.entries ?? {})
-            .filter((e) => e.type === 'story' || e.name !== 'Docs')
-            .map((e) => ({ id: e.id, title: e.title, name: e.name ?? '' }))
+          stories = Object.values(index.entries ?? {}).map((e) => ({ id: e.id, title: e.title, name: e.name ?? '', type: e.type ?? 'story' }))
         } catch { /* index unavailable */ }
       }
       return {
