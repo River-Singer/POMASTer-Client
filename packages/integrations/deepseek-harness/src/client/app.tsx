@@ -928,69 +928,6 @@ function ActionsPage(props: { t: Translate }): React.ReactElement {
   )
 }
 
-/* ============================================================ MASTer field test (real-project mapping) */
-
-interface MasterPayload {
-  identity: { name: string; root: string }
-  storeStatus: { ok: boolean; routeId: string | null; generationSeq: number; objects: { total: number } | null }
-  migrateAnalyze: { ok: boolean; result: unknown; errors: Array<{ code: string; message: string }> }
-  trellis: { tasks: AnyRecord[]; tasksByStatus: Record<string, number>; bpHead: string; specDirs: string[]; manifestLines: number }
-  architecture: { title: string; groups: DiagGroup[]; edges: DiagEdge[] }
-}
-
-function MasterPage(props: { t: Translate }): React.ReactElement {
-  const { t } = props
-  const { data, error } = usePageData<MasterPayload>(() => getJSON('/api/pomaster/master'), [])
-  if (error !== null) return <div className="pmwb-err">{t('tab.master')}: {error}</div>
-  if (data === null) return <div className="pmwb-empty">{t('common.loading')}</div>
-  const statusCounts = Object.entries(data.trellis.tasksByStatus)
-  const inProgress = data.trellis.tasksByStatus['in_progress'] ?? 0
-  return (
-    <div>
-      <DocTitle summary={`MASTer 实测 · ${data.identity.name}`} sub={data.identity.root} />
-      <Card title={t('master.actual')}>
-        <KV rows={[
-          [t('master.tasks'), `${data.trellis.tasks.length} 个` + (inProgress > 0 ? `（进行中 ${inProgress}）` : '')],
-          [t('master.spec'), `${data.trellis.specDirs.join(' / ')} · manifest ${data.trellis.manifestLines} 条`],
-          ['业务蓝图', data.trellis.bpHead !== '' ? 'BP-MASTER-FRONTEND-REFACTOR 1.4.0 · approved/effective' : '—'],
-          ...statusCounts.map(([s, n]) => ({ k: s, node: <span key={s}><Badge tone={toneFor(s === 'done' ? 'passed' : s)}>{s} × {n}</Badge></span> })).map(({ k, node }) => [k, node] as [string, React.ReactNode]),
-        ]} />
-        {data.trellis.bpHead !== '' && <pre className="pmwb-pre" style={{ marginTop: 8 }}>{data.trellis.bpHead}</pre>}
-        <div className="pmwb-muted" style={{ marginTop: 8 }}>{t('master.harness')}</div>
-      </Card>
-      <Card title={t('master.simulate')}>
-        <GroupDiagram groups={data.architecture.groups} edges={data.architecture.edges} compact />
-        <div className="pmwb-muted" style={{ marginTop: 8 }}>
-          {t('master.storeSeen')}: <span className="pmwb-mono">{data.storeStatus.routeId ?? '—'}</span> · {data.storeStatus.objects?.total ?? 0} {t('overview.objects')}
-        </div>
-      </Card>
-      <Card title={t('master.analyze')}>
-        {data.migrateAnalyze.ok ? (
-          <pre className="pmwb-pre">{JSON.stringify(data.migrateAnalyze.result, null, 2).slice(0, 3000)}</pre>
-        ) : (
-          <div>
-            <Badge tone="warn">{t('master.analyzeFail')}</Badge>
-            <EnvelopeErrors errors={data.migrateAnalyze.errors} />
-          </div>
-        )}
-      </Card>
-      <Card title={t('master.gap')}>
-        <ul className="pmwb-check">
-          <li><span className="pmwb-check-mark" data-ok="true">✓</span><div>output-root 策略覆盖已在用——文件级规范已对齐 PoMaster（.pomaster/output-roots.yaml）</div></li>
-          <li><span className="pmwb-check-mark" data-ok="true">✓</span><div>BP 蓝图机器编译且带 SHA 锚——权威链完整（approved/effective）</div></li>
-          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>{data.trellis.tasks.length} 个真实任务没有进 kernel store——没有 permit、没有八拍、没有证据闭环</div></li>
-          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>{data.trellis.manifestLines} 条 spec 没进 spec routing——本项目的 context compile 现在不可用</div></li>
-          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>BP 蓝图没有进 knowledge 面（CLI knowledge 检索总量为 0）</div></li>
-          <li><span className="pmwb-check-mark" data-ok="false">…</span><div>CLI 视角 R_UNDETERMINED——治理权威未声明，插件投影只能看到空盘面</div></li>
-        </ul>
-        <div style={{ marginTop: 8 }}>
-          结论：先 <span className="pmwb-mono">pomaster init</span>，再 <span className="pmwb-mono">migrate trellis-spec --analyze → --apply</span> 把 Trellis/BP 形态升入 store——这正是官方迁移接口存在的意义。
-        </div>
-      </Card>
-    </div>
-  )
-}
-
 /* ============================================================ shell */
 
 interface TabDef { id: string; labelKey: string; el: (t: Translate) => React.ReactElement }
@@ -1002,7 +939,6 @@ const TABS: TabDef[] = [
   { id: 'knowledge', labelKey: 'tab.knowledge', el: (t) => <KnowledgePage t={t} /> },
   { id: 'routing', labelKey: 'tab.routing', el: (t) => <RoutingPage t={t} /> },
   { id: 'topology', labelKey: 'tab.topology', el: (t) => <TopologyPage t={t} /> },
-  { id: 'master', labelKey: 'tab.master', el: (t) => <MasterPage t={t} /> },
   { id: 'verification', labelKey: 'tab.verification', el: (t) => <VerificationPage t={t} /> },
   { id: 'evidence', labelKey: 'tab.evidence', el: (t) => <EvidencePage t={t} /> },
   { id: 'components', labelKey: 'tab.components', el: (t) => <ComponentsPage t={t} /> },

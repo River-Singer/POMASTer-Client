@@ -9,7 +9,7 @@ export const ZH: WorkbenchDict = {
   // tabs
   'tab.overview': '概览', 'tab.tasks': '任务', 'tab.attention': '注意力', 'tab.knowledge': '知识',
   'tab.routing': '路由', 'tab.topology': '拓扑', 'tab.verification': '验证', 'tab.evidence': '证据',
-  'tab.components': '组件', 'tab.actions': '操作', 'tab.master': 'MASTer 实测',
+  'tab.components': '组件', 'tab.actions': '操作',
   // common
   'common.refresh': '刷新', 'common.search': '搜索', 'common.run': '执行', 'common.query': '查询',
   'common.loading': '加载中…', 'common.empty': '暂无', 'common.none': '—', 'common.clean': '干净——当前不需要人工介入',
@@ -130,7 +130,7 @@ export const EN: WorkbenchDict = {
   'panel': 'POMaster Workbench',
   'tab.overview': 'Overview', 'tab.tasks': 'Tasks', 'tab.attention': 'Attention', 'tab.knowledge': 'Knowledge',
   'tab.routing': 'Routing', 'tab.topology': 'Topology', 'tab.verification': 'Verification', 'tab.evidence': 'Evidence',
-  'tab.components': 'Components', 'tab.actions': 'Actions', 'tab.master': 'MASTer field test',
+  'tab.components': 'Components', 'tab.actions': 'Actions',
   'common.refresh': 'Refresh', 'common.search': 'Search', 'common.run': 'Run', 'common.query': 'Query',
   'common.loading': 'loading…', 'common.empty': 'none yet', 'common.none': '—', 'common.clean': 'clean — nothing needs a human right now',
   'common.polls': 'polls every 10s', 'common.authority': 'authority', 'common.result': 'result',
