@@ -401,10 +401,9 @@ export class PomasterController {
         ],
         edges: [
           { from: 'bp', to: 'tasks', label: '驱动任务' },
-          { from: 'spec', to: 'code', label: '约束实现' },
-          { from: 'tasks', to: 'code', label: '实现落地' },
-          { from: 'tasks', to: 'frontend', label: '产物落点', dashed: true },
-          { from: 'store', to: 'tasks', label: '待映射（gap）', dashed: true },
+          { from: 'spec', to: 'app', label: '约束实现' },
+          { from: 'tasks', to: 'app', label: '实现落地' },
+          { from: 'frontend', to: 'app', label: '产物落点', dashed: true },
         ],
       }
 
