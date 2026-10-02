@@ -220,8 +220,19 @@ export class PomasterController {
         }
       }
       const react = await probe(6007)
+      let stories: Array<{ id: string; title: string; name: string }> = []
+      if (react) {
+        try {
+          const response = await fetch('http://127.0.0.1:6007/index.json')
+          const index = (await response.json()) as { entries?: Record<string, { id: string; title: string; name?: string; type?: string }> }
+          stories = Object.values(index.entries ?? {})
+            .filter((e) => e.type === 'story' || e.name !== 'Docs')
+            .map((e) => ({ id: e.id, title: e.title, name: e.name ?? '' }))
+        } catch { /* index unavailable */ }
+      }
       return {
-        react: { available: react, base: `http://127.0.0.1:6007` },
+        react: { available: react, base: 'http://127.0.0.1:6007' },
+        stories,
         startCommand: 'cd POMaster_VNext && corepack pnpm studio:react:dev',
       }
     })
@@ -229,6 +240,45 @@ export class PomasterController {
     getRoute('/api/pomaster/actions', async () => ({
       actions: ACTION_ALLOWLIST.map((a) => ({ id: a.id, label: a.label, authorityNote: a.authorityNote, params: a.params })),
     }))
+
+    // ---- IA Reset (PR-IA-2): Work workspace merged projection ----
+    getRoute('/api/pomaster/work', async () => {
+      const [review, routing, executions, alerts] = await Promise.all([
+        run(['view', 'review', 'TASK.DSH_WORKBENCH']),
+        run(['context', 'compile', '--role', 'frontend', '--change', 'TASK.DSH_WORKBENCH', '--check']),
+        run(['execution', 'list']),
+        run<RawAlertsResult>(['alerts']),
+      ])
+      return { review: review.result, routing: routing.result, executions: executions.result, alerts: alerts.result }
+    })
+
+    getRoute('/api/pomaster/executions', async () => ({
+      executions: (await run(['execution', 'list'])).result,
+    }))
+
+    // ---- IA Reset (PR-IA-3): Knowledge documents (whitelisted real files) ----
+    getRoute('/api/pomaster/knowledge-docs', async (query) => {
+      const docDir = `${this.config.workspaceRoot}/doc`
+      const requested = query.get('path')
+      if (requested !== null && requested !== '') {
+        // whitelist: only files that exist in doc/ (no traversal)
+        const safe = basename(requested)
+        const body = await readFile(`${docDir}/${safe}`, 'utf8').catch(() => null)
+        if (body === null) return notFound(`document not found: ${safe}`)
+        return { name: safe, body }
+      }
+      const entries = await readdir(docDir).catch(() => [] as string[])
+      const docs = entries.filter((f) => f.endsWith('.md')).map((f) => ({ name: f, group: 'Project Documents' }))
+      return {
+        docs,
+        specTree: [
+          { name: 'backend', group: 'Specs' },
+          { name: 'frontend', group: 'Specs' },
+          { name: 'guides', group: 'Specs' },
+        ],
+        note: 'MASTer spec tree served under /api/pomaster/master',
+      }
+    })
 
     // ---- MASTer 实测：真实项目治理映射（全部白名单只读路径 + CLI --dir 投影） ----
     const MASTER = 'D:/Vscode Documents/MASTer_master'
