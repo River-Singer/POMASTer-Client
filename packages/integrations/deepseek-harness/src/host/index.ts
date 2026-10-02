@@ -280,6 +280,27 @@ export class PomasterController {
       }
     })
 
+    getRoute('/api/pomaster/master-task', async (query) => {
+      const dir = query.get('dir') ?? ''
+      // whitelist: simple directory name, no traversal
+      if (dir === '' || /[^a-zA-Z0-9._-]/.test(dir)) return notFound('invalid task dir')
+      const base = `${MASTER}/.trellis/tasks/${dir}`
+      const taskJson = await readFile(`${base}/task.json`, 'utf8').then((t) => JSON.parse(t) as Record<string, unknown>).catch(() => null)
+      const prd = await readFile(`${base}/prd.md`, 'utf8').catch(() => '')
+      const readJsonl = async (file: string): Promise<Array<{ file: string; reason: string }>> => {
+        try {
+          return (await readFile(`${base}/${file}`, 'utf8')).split(/\r?\n/).filter((l) => l.trim() !== '').map((l) => JSON.parse(l) as { file: string; reason: string })
+        } catch { return [] }
+      }
+      return {
+        dir,
+        task: taskJson,
+        prd: prd.split(/\r?\n/).slice(0, 40).join('\n'),
+        implementRefs: await readJsonl('implement.jsonl'),
+        checkRefs: await readJsonl('check.jsonl'),
+      }
+    })
+
     // ---- MASTer 实测：真实项目治理映射（全部白名单只读路径 + CLI --dir 投影） ----
     const MASTER = 'D:/Vscode Documents/MASTer_master'
     getRoute('/api/pomaster/master', async () => {
@@ -294,14 +315,34 @@ export class PomasterController {
       let tasks: Array<Record<string, unknown>> = []
       try {
         const dirs = (await readdir(tasksDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name)
-        tasks = (await Promise.all(dirs.map(async (dir) => {
+        tasks = (await Promise.all(dirs.map(async (dir): Promise<Record<string, unknown> | null> => {
           try {
             const raw = await readFile(`${tasksDir}/${dir}/task.json`, 'utf8')
-            return JSON.parse(raw) as Record<string, unknown>
+            const task = JSON.parse(raw) as Record<string, unknown>
+            const countLines = async (file: string): Promise<number> => {
+              try {
+                const text = await readFile(`${tasksDir}/${dir}/${file}`, 'utf8')
+                return text.split(/\r?\n/).filter((l) => l.trim() !== '').length
+              } catch { return 0 }
+            }
+            let prdSummary = ''
+            try {
+              const prd = await readFile(`${tasksDir}/${dir}/prd.md`, 'utf8')
+              const bodyLine = prd.split(/\r?\n/).find((l) => l.trim() !== '' && !l.startsWith('#')) ?? ''
+              prdSummary = bodyLine.slice(0, 140)
+            } catch { /* no prd */ }
+            return {
+              ...(task as Record<string, unknown>),
+              dir,
+              implementRefs: await countLines('implement.jsonl'),
+              checkRefs: await countLines('check.jsonl'),
+              prdSummary,
+            }
           } catch {
             return null
           }
         }))).filter((x): x is Record<string, unknown> => x !== null)
+        tasks.sort((a, b) => str(a['dir']).localeCompare(str(b['dir'])))
       } catch { /* tasks dir absent */ }
 
       let bpHead = ''
@@ -321,43 +362,60 @@ export class PomasterController {
         specDirs = (await readdir(`${MASTER}/.trellis/spec`, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name)
       } catch { /* spec absent */ }
 
-      const architecture = {
-        title: 'MASTer 整车成本分析前端（master-vehicle-cost-analysis）',
-        groups: [
-          { id: 'gov', title: '治理与规范（实际形态）', tone: '#722ed1', col: 1, nodes: [
-            { id: 'spec', title: '.trellis/spec', sub: `${specDirs.join(' / ') || '—'} · manifest ${manifestLines} 条` },
-            { id: 'tasks', title: '.trellis/tasks', sub: `${tasks.length} 个真实任务 · task.json/prd.md/jsonl` },
-            { id: 'bp', title: 'outputs/bp 蓝图', sub: 'BP-MASTER-FRONTEND-REFACTOR 1.4.0 · approved' },
-          ] },
-          { id: 'fe', title: '前端 Frontend（Feature-Sliced）', tone: '#1677ff', col: 2, nodes: [
-            { id: 'app', title: 'src/app' }, { id: 'pages', title: 'src/pages' }, { id: 'features', title: 'src/features' },
-            { id: 'entities', title: 'src/entities' }, { id: 'shared', title: 'src/shared' },
-          ] },
-          { id: 'pm', title: 'PoMaster 形态（kernel store）', tone: '#fa8c16', col: 3, nodes: [
-            { id: 'store', title: '.pomaster/state', sub: `CLI: ${String(storeStatus.result?.next_action?.route_id ?? '?')} · 0 objects（gap）` },
-            { id: 'roots', title: '.pomaster/output-roots.yaml', sub: 'output-root 策略覆盖（在用）' },
-            { id: 'migrate', title: 'migrate trellis-spec --analyze', sub: '官方迁移分析接口' },
-          ] },
-        ],
-        edges: [
-          { from: 'bp', to: 'tasks', label: '驱动任务' },
-          { from: 'spec', to: 'fe', label: '约束实现' },
-          { from: 'tasks', to: 'fe', label: '实现落地' },
-          { from: 'fe', to: 'store', label: '应映射入 store（gap）', dashed: true },
-        ],
-      }
-
       const byStatus: Record<string, number> = {}
       for (const task of tasks) {
         const s = str(task['status']) || 'unknown'
         byStatus[s] = (byStatus[s] ?? 0) + 1
       }
 
-      return {
+      // code base size (src, ts/tsx)
+      const countCodeFiles = async (root: string): Promise<number> => {
+        let count = 0
+        const walk = async (dir: string): Promise<void> => {
+          const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+          for (const e of entries) {
+            if (e.isDirectory()) await walk(`${dir}/${e.name}`)
+            else if (/\.(tsx?|jsx?)$/.test(e.name)) count++
+          }
+        }
+        await walk(root)
+        return count
+      }
+      const srcTsFiles = await countCodeFiles(`${MASTER}/src`)
+
+      const architecture = {
+        title: 'MASTer 整车成本分析前端（master-vehicle-cost-analysis）',
+        groups: [
+          { id: 'trellis', title: '开发任务与规范（.trellis）', tone: '#722ed1', col: 1, nodes: [
+            { id: 'tasks', title: '.trellis/tasks', sub: tasks.length + ' 个真实任务 · in_progress ' + String(byStatus['in_progress'] ?? 0) + ' · 引用/检查记录齐备' },
+            { id: 'spec', title: '.trellis/spec', sub: specDirs.join(' / ') + ' · manifest ' + manifestLines + ' 条' },
+            { id: 'workflow', title: 'workflow.md + workspace', sub: '开发流程与工作区日志' },
+          ] },
+          { id: 'outputs', title: '项目事实与文档（outputs）', tone: '#fa8c16', col: 2, nodes: [
+            { id: 'bp', title: 'outputs/bp', sub: 'BP-MASTER-FRONTEND-REFACTOR 1.4.0 · approved' },
+            { id: 'frontend', title: 'outputs/frontend', sub: '前端治理产物' },
+            { id: 'handoffs', title: 'outputs/handoffs', sub: 'frontend-to-bp / frontend-to-backend' },
+          ] },
+          { id: 'code', title: '核心代码（src · Feature-Sliced）', tone: '#1677ff', col: 3, nodes: [
+            { id: 'app', title: 'src/app' }, { id: 'pages', title: 'src/pages' }, { id: 'features', title: 'src/features' },
+            { id: 'entities', title: 'src/entities' }, { id: 'shared', title: 'src/shared' },
+          ] },
+        ],
+        edges: [
+          { from: 'bp', to: 'tasks', label: '驱动任务' },
+          { from: 'spec', to: 'code', label: '约束实现' },
+          { from: 'tasks', to: 'code', label: '实现落地' },
+          { from: 'tasks', to: 'frontend', label: '产物落点', dashed: true },
+          { from: 'store', to: 'tasks', label: '待映射（gap）', dashed: true },
+        ],
+      }
+
+return {
         identity: { name: 'master-vehicle-cost-analysis', root: MASTER },
         storeStatus: { ok: storeStatus.ok, routeId: storeStatus.result?.next_action?.route_id ?? null, generationSeq: storeStatus.result?.generation_seq ?? 0, objects: storeStatus.result?.objects ?? null },
         migrateAnalyze: { ok: migrateAnalyze?.ok ?? false, result: migrateAnalyze?.result ?? null, errors: migrateAnalyze?.errors ?? [] },
         trellis: { tasks, tasksByStatus: byStatus, bpHead, specDirs, manifestLines },
+        srcTsFiles,
         architecture,
       }
     })

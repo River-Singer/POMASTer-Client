@@ -9,7 +9,7 @@ import { WORKBENCH_CSS } from './styles.ts'
 import { Badge } from './ui.tsx'
 import type { Translate } from './i18n.ts'
 import { OverviewPage2 } from './pages/overview.tsx'
-import { WorkPage } from './pages/work.tsx'
+import { WorkPage2 } from './pages/work.tsx'
 import { KnowledgePage2 } from './pages/knowledge.tsx'
 import { SystemMapPage } from './pages/sysmap.tsx'
 import { ComponentsPage2 } from './pages/components2.tsx'
@@ -45,13 +45,13 @@ export function WorkbenchApp(props: { t: Translate }): React.ReactElement {
 
   const page = (): React.ReactElement => {
     switch (active) {
-      case 'work': return <WorkPage t={t} />
+      case 'work': return <WorkPage2 t={t} />
       case 'knowledge': return <KnowledgePage2 t={t} routingManifestRefs={[]} />
       case 'map': return <SystemMapPage t={t} />
       case 'components': return <ComponentsPage2 t={t} />
       case 'verification': return <VerificationPage2 t={t} />
       case 'overview':
-      default: return <OverviewPage2 t={t} onOpenWork={() => setActive('work')} />
+      default: return <OverviewPage2 t={t} onOpenWork={() => setActive('work')} onGoto={(tab) => setActive(tab)} />
     }
   }
 
