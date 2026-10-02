@@ -11,6 +11,7 @@
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
+import { collectProjectTopology, type ProjectEntry } from './project-collector.ts'
 import {
   buildProjectOverview,
   runPomasterJson,
@@ -297,6 +298,20 @@ export class PomasterController {
         implementRefs: await readJsonl('implement.jsonl'),
         checkRefs: await readJsonl('check.jsonl'),
       }
+    })
+
+    // ---- IA Reset (PR-IA-5 泛化): 项目无关拓扑收集（任何登记项目自动生成） ----
+    const projectRegistry: ProjectEntry[] = [
+      { key: 'master', name: 'MASTer 整车成本分析前端', root: 'D:/Vscode Documents/MASTer_master' },
+    ]
+    getRoute('/api/pomaster/projects', async () => ({
+      projects: projectRegistry.map((p) => ({ key: p.key, name: p.name })),
+    }))
+    getRoute('/api/pomaster/project-topology', async (query) => {
+      const key = query.get('project') ?? projectRegistry[0]?.key ?? ''
+      const project = projectRegistry.find((p) => p.key === key)
+      if (project === undefined) return notFound(`project not registered: ${key}`)
+      return collectProjectTopology(project)
     })
 
     // ---- MASTer 实测：真实项目治理映射（全部白名单只读路径 + CLI --dir 投影） ----
