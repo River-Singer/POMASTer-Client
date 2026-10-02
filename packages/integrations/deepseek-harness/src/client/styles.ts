@@ -79,8 +79,8 @@ export const WORKBENCH_CSS = `
 .pmwb-check .pmwb-check-mark[data-ok="false"] { background: #fffbeb; color: #b45309; }
 
 /* --- explorer gallery --- */
-.pmwb-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
-.pmwb-tile { border: 1px solid #e5e7eb; border-radius: 9px; background: #ffffff; cursor: pointer; text-align: center; padding: 12px 10px; transition: border-color .12s ease, box-shadow .12s ease; }
+.pmwb-gallery { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.pmwb-tile { flex: 0 0 auto; min-width: 230px; max-width: 100%; border: 1px solid #e5e7eb; border-radius: 9px; background: #ffffff; cursor: pointer; text-align: center; padding: 12px 14px; transition: border-color .12s ease, box-shadow .12s ease; }
 .pmwb-tile:hover { border-color: #d1d5db; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 .pmwb-tile .pmwb-tile-icon { color: #374151; }
 .pmwb-tile .pmwb-tile-name { font-size: 12.5px; margin-top: 6px; color: #111827; word-break: break-word; }
@@ -150,8 +150,8 @@ export const WORKBENCH_CSS = `
 
 /* --- sample frames must never overflow their tile --- */
 .pmwb, .pmwb * { box-sizing: border-box; }
-.pmwb-sample-frame { align-items: stretch; width: 100%; overflow: hidden; }
-.pmwb-sample-frame .pmwb-input { min-width: 0; width: 100%; max-width: 240px; }
-.pmwb-sample-frame .pmwb-table { min-width: 0; width: 100%; }
-.pmwb-gallery .pmwb-tile { overflow: hidden; }
+.pmwb-sample-frame { align-items: stretch; width: auto; min-width: 190px; overflow: visible; }
+.pmwb-sample-frame .pmwb-input { width: 210px; }
+.pmwb-sample-frame .pmwb-table { width: auto; min-width: 280px; }
+
 `
