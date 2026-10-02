@@ -147,4 +147,11 @@ export const WORKBENCH_CSS = `
 .pmwb-portal-card .pc-path { font-size: 11.5px; color: #6b7280; font-family: var(--tk-typography-family-mono, Consolas, monospace); margin: 2px 0 10px; }
 .pmwb-portal-card .pc-stat { font-size: 12.5px; color: #374151; margin: 3px 0; }
 .pmwb-portal-card .pc-stat b { color: #111827; }
+
+/* --- sample frames must never overflow their tile --- */
+.pmwb, .pmwb * { box-sizing: border-box; }
+.pmwb-sample-frame { align-items: stretch; width: 100%; overflow: hidden; }
+.pmwb-sample-frame .pmwb-input { min-width: 0; width: 100%; max-width: 240px; }
+.pmwb-sample-frame .pmwb-table { min-width: 0; width: 100%; }
+.pmwb-gallery .pmwb-tile { overflow: hidden; }
 `
