@@ -274,3 +274,104 @@ function kebabize(name: string): string {
 export function storeNodeId(module: string, useName: string): string {
   return 'STORE:' + module + '#' + useName
 }
+
+/* ============================================================ Software Atlas（语义实体全图） */
+
+export interface AtlasNode { id: string; kind: 'route' | 'page' | 'component' | 'dialog' | 'store'; name: string; file: string }
+export interface AtlasEdge { relation: string; from: string; to: string; evidence: string; provenance: 'DECLARED' | 'OBSERVED' }
+export interface SoftwareAtlas {
+  generatedAt: string
+  analyzer: string
+  routeCount: number
+  pages: Array<{ id: string; routePath: string; routeName: string; title: string; dir: string; vueFiles: string[]; dialogs: string[] }>
+  sharedComponents: string[]
+  stores: string[]
+  edges: Array<{ from: string; relation: string; to: string }>
+}
+
+/** 全量语义实体图：扫 src/pages 下每个 page 目录 → 页面 .vue 主文件 + 同目录 dialog 组件；
+ * routes.ts 事实源匹配路由；shared/ui barrel 展开 Master 组件清单。 */
+function readdirSync2(dir: string): string[] { try { return require('node:fs').readdirSync(dir); } catch (e) { return []; } }
+export function buildSoftwareAtlas(masterRoot: string): SoftwareAtlas {
+  var routesSrc = readIfExists2(join(masterRoot, 'src', 'app', 'router', 'routes.ts')) ?? ''
+  var pagesRoot = join(masterRoot, 'src', 'pages')
+  var pageDirs: string[] = []
+  try {
+    pageDirs = readdirSync2(join(pagesRoot))
+  } catch (e) { /* pages absent */ }
+
+  // shared/ui barrel → Master* 组件清单
+  var sharedComponents: string[] = []
+  try {
+    var uiBarrel = readFileSync(join(masterRoot, 'src', 'shared', 'ui', 'index.ts'), 'utf8')
+    var barrelRe = /export\s*\{[^}]*?as\s+(\w+)\s*[^}]*\}\s*from|export\s*\{[^}]*?(\w+)\s*\}/g
+    var m: RegExpExecArray | null
+    while ((m = barrelRe.exec(uiBarrel)) !== null) {
+      if (m[1] && m[1].indexOf('Master') === 0) sharedComponents.push(m[1])
+    }
+  } catch (e) { /* barrel absent */ }
+
+  var stores: string[] = []
+  try {
+    var stateFiles: string[] = readdirSync2(join(masterRoot, 'src', 'shared', 'state'))
+    for (var si = 0; si < stateFiles.length; si++) {
+      var srcPath = join(masterRoot, 'src', 'shared', 'state', stateFiles[si] ?? '')
+      var src = readIfExists2(srcPath)
+      if (src === null) continue
+      var sm = /export\s+(?:const|function)\s+(use\w+)/g
+      var smm: RegExpExecArray | null
+      while ((smm = sm.exec(src)) !== null) stores.push(smm[1] ?? '')
+    }
+  } catch (e) { /* state absent */ }
+
+  var pages: SoftwareAtlas['pages'] = []
+  var edges: SoftwareAtlas['edges'] = []
+
+  for (var di = 0; di < pageDirs.length; di++) {
+    var dir = pageDirs[di] ?? ''
+    var dirPath = join(pagesRoot, dir)
+    var vueFiles: string[] = []
+    try {
+      vueFiles = readdirSync2(dirPath).filter(function (f) { return f.endsWith('.vue') })
+    } catch (e) { continue }
+    if (vueFiles.length === 0) continue
+    var mainVue = vueFiles.find(function (f) { return /Page\.vue$/.test(f) }) ?? vueFiles[0]
+    var dialogs = vueFiles.filter(function (f) { return /Dialog\.vue$/.test(f) })
+    // 路由匹配：routes.ts 的 lazy import 路径含此目录名
+    var routeName = ''
+    var routePath = ''
+    var routeRe = new RegExp("import\\s+\\w+\\s+from\\s+'@/pages/" + dir + "/")
+    if (routeRe.test(routesSrc)) {
+      // 从 routes.ts 提取该页的路由 path 与 name
+      var routeBlock = routesSrc.match(new RegExp("\\{[^}]*" + dir + "[^}]*\\}"))
+      if (routeBlock) {
+        var pn = /name:\s*'([A-Z0-9_-]+)'/.exec(routeBlock[0])
+        var pp = /path:\s*'([^']+)'/.exec(routeBlock[0])
+        if (pn && pn[1] !== undefined) routeName = pn[1]
+        if (pp && pp[1] !== undefined) routePath = pp[1]
+      }
+    }
+    pages.push({
+      id: 'PAGE:' + dir,
+      routePath: routePath,
+      routeName: routeName,
+      title: mainVue !== undefined ? mainVue.replace('.vue', '') : '',
+      dir: dir,
+      vueFiles: vueFiles,
+      dialogs: dialogs,
+    })
+    edges.push({ from: 'routes.ts', relation: 'contains-route', to: 'PAGE:' + dir })
+  }
+
+  return {
+    generatedAt: observedNow(),
+    analyzer: 'topology-compiler v0.1 (heuristic-regex)',
+    routeCount: routesSrc.split(/path:\s*'/).length - 1,
+    pages: pages,
+    sharedComponents: sharedComponents,
+    stores: stores,
+    edges: edges,
+  }
+}
+
+
