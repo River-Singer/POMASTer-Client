@@ -12,6 +12,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { collectProjectTopology, type ProjectEntry } from './project-collector.ts'
+import { buildPageSlice, type SliceInput } from './topology-compiler.ts'
 import {
   buildProjectOverview,
   runPomasterJson,
@@ -312,6 +313,19 @@ export class PomasterController {
       const project = projectRegistry.find((p) => p.key === key)
       if (project === undefined) return notFound(`project not registered: ${key}`)
       return collectProjectTopology(project)
+    })
+
+    // ---- Topology Compiler Spike（三切片验证 · Owner 2026-10-03 指令） ----
+    const SLICES: Record<string, SliceInput> = {
+      '1': { masterRoot: 'D:/Vscode Documents/MASTer_master', pageFile: 'page-csc-price/CscPricePage.vue', pageRouteId: 'ROUTE:/csc/accessory', pageName: 'PAGE-APP-CSC-PRICE', entitiesUsed: [{ importName: 'csc-price', module: 'csc-price' }], sharedUiUsed: [] },
+      '2': { masterRoot: 'D:/Vscode Documents/MASTer_master', pageFile: 'page-task-step-build-bom/CalcVehiclePartsPage.vue', pageRouteId: 'ROUTE:/bom/build', pageName: 'PAGE-TASK-STEP-BUILD-BOM', entitiesUsed: [{ importName: 'calc-vehicle-parts', module: 'calc-vehicle-parts' }, { importName: 'set-db', module: 'set-db' }], sharedUiUsed: [] },
+      '3': { masterRoot: 'D:/Vscode Documents/MASTer_master', pageFile: 'page-dashboard/DashboardPage.vue', pageRouteId: 'ROUTE:/', pageName: 'PAGE-APP-DASHBOARD', entitiesUsed: [{ importName: 'dashboard', module: 'dashboard' }], sharedUiUsed: [] },
+    }
+    getRoute('/api/pomaster/topology-slice', async (query) => {
+      const slice = query.get('slice') ?? '1'
+      const input = SLICES[slice]
+      if (input === undefined) return notFound(`slice not found: ${slice}（可用 1|2|3）`)
+      return buildPageSlice(input)
     })
 
     // ---- MASTer 实测：真实项目治理映射（全部白名单只读路径 + CLI --dir 投影） ----
